@@ -263,7 +263,6 @@ public class TurmaController {
     }
 
     @Operation(summary = "Adicionar Aluno à Turma")
-    @PostMapping("/{turmaId}/alunos/{alunoId}")
     @PreAuthorize("@access.driverOfTurma(#p0)")
     public ResponseEntity<String> adicionarAlunoTurma(
             @PathVariable Long turmaId,

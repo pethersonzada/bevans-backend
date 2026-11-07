@@ -1,6 +1,7 @@
 package com.bevans.security;
 
 import java.util.List;
+import java.util.Arrays;
 import org.springframework.context.annotation.Bean;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Configuration;
@@ -18,9 +19,15 @@ import org.springframework.web.cors.CorsConfiguration;
 @EnableMethodSecurity
 public class SecurityConfig {
     private final FirebaseAuthenticationFilter firebaseFilter;
+    private final String allowedOrigins;
 
-    public SecurityConfig(FirebaseAuthenticationFilter firebaseFilter) {
+    public SecurityConfig(
+            FirebaseAuthenticationFilter firebaseFilter,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:8081,http://localhost:19006}"
+            ) String allowedOrigins) {
         this.firebaseFilter = firebaseFilter;
+        this.allowedOrigins = allowedOrigins;
     }
 
     // Executar o filtro Firebase apenas dentro da cadeia Spring Security.
@@ -38,7 +45,10 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(request -> {
                 CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(List.of("*"));
+                config.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                        .map(String::trim)
+                        .filter(origin -> !origin.isBlank())
+                        .toList());
                 config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
                 config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Bypass-Tunnel-Reminder"));
                 return config;

@@ -40,7 +40,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 )
 @RestController
 @RequestMapping("/rota")
-@CrossOrigin(origins = "*")
 public class RotaController {
 
     private final PresencaRepository presencaRepository;

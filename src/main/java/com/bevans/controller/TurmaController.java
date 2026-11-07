@@ -30,7 +30,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 )
 @RestController
 @RequestMapping("/turmas")
-@CrossOrigin(origins = "*")
 public class TurmaController {
 
     private final TurmaService turmaService;

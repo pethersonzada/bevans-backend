@@ -410,6 +410,12 @@ public class TurmaService {
                         )
                 );
 
+        if (!"PASSAGEIRO".equals(aluno.getTipo())) {
+            throw new IllegalArgumentException(
+                    "Somente passageiros podem solicitar entrada em turmas."
+            );
+        }
+
         AlunoTurma vinculo = alunoTurmaRepository
                 .findByTurmaIdAndAlunoId(
                         turma.getId(),

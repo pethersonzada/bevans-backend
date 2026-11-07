@@ -76,7 +76,8 @@ public class AccessPolicy {
 
     public boolean driverOfTurma(Long turmaId) {
         if (!isMotorista() || turmaId == null) return false;
-        return turmas.findById(turmaId).map(t -> t.getMotorista() != null
+        return turmas.findById(turmaId).map(t -> !t.isExcluido()
+                && t.getMotorista() != null
                 && own(t.getMotorista().getId())).orElse(false);
     }
 
@@ -91,6 +92,9 @@ public class AccessPolicy {
         if (driverOfTurma(turmaId)) return true;
         Usuario u = usuario();
         return u != null && turmaId != null
+                && turmas.findById(turmaId)
+                    .filter(t -> !t.isExcluido())
+                    .isPresent()
                 && vinculos.existsByTurmaIdAndAlunoIdAndStatus(
                     turmaId, u.getId(), "APROVADO");
     }

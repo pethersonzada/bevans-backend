@@ -57,6 +57,7 @@ class RotaPermissoesExtrasHttpTest extends BaseAutorizacaoHttpTest {
     }
     @Test void passageiroAprovadoPodeConsultarStatusDaRota() throws Exception {
         identidade("pass-2", usuario(2, "PASSAGEIRO"));
+        turma(13, usuario(1, "MOTORISTA"));
         when(vinculos.existsByTurmaIdAndAlunoIdAndStatus(13L, 2L, "APROVADO"))
             .thenReturn(true);
         try (var ignored = firebase("valido", "pass-2")) {

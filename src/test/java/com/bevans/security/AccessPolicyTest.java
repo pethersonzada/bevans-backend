@@ -77,6 +77,40 @@ class AccessPolicyTest {
         assertTrue(access.ownAddress(9L));
     }
 
+
+    @Test
+    void passageiroAprovadoNaoAcessaTurmaExcluida() {
+        outro.setTipo("PASSAGEIRO");
+        when(usuarios.findByFirebaseUid("uid-motorista"))
+            .thenReturn(Optional.of(outro));
+
+        Turma turma = new Turma();
+        turma.setId(12L);
+        turma.setExcluido(true);
+
+        when(turmas.findById(12L)).thenReturn(Optional.of(turma));
+
+        assertFalse(access.canReadTurma(12L));
+        verify(vinculos, never())
+            .existsByTurmaIdAndAlunoIdAndStatus(12L, 2L, "APROVADO");
+    }
+
+    @Test
+    void passageiroAprovadoAcessaTurmaAtiva() {
+        when(usuarios.findByFirebaseUid("uid-motorista"))
+            .thenReturn(Optional.of(outro));
+
+        Turma turma = new Turma();
+        turma.setId(13L);
+        turma.setExcluido(false);
+
+        when(turmas.findById(13L)).thenReturn(Optional.of(turma));
+        when(vinculos.existsByTurmaIdAndAlunoIdAndStatus(
+            13L, 2L, "APROVADO")).thenReturn(true);
+
+        assertTrue(access.canReadTurma(13L));
+    }
+
     @Test
     void semTokenNaoHaPermissao() {
         SecurityContextHolder.clearContext();

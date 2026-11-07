@@ -262,21 +262,6 @@ public class TurmaController {
         return ResponseEntity.ok(resultado);
     }
 
-    @Operation(summary = "Adicionar Aluno à Turma")
-    @PreAuthorize("@access.driverOfTurma(#p0)")
-    public ResponseEntity<String> adicionarAlunoTurma(
-            @PathVariable Long turmaId,
-            @PathVariable Long alunoId
-    ) {
-        turmaService.adicionarAluno(
-                turmaId, alunoId
-        );
-
-        return ResponseEntity.ok(
-                "Aluno vinculado com sucesso."
-        );
-    }
-
     @Operation(summary = "Remover Aluno da Turma")
     @DeleteMapping("/{turmaId}/alunos/{alunoId}")
     @PreAuthorize("@access.driverOfTurma(#p0)")

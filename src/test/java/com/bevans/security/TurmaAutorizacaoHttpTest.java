@@ -160,4 +160,34 @@ class TurmaAutorizacaoHttpTest {
         }
         verifyNoInteractions(turmaService);
     }
+
+    @Test
+    void idInvalidoNoPutRecebe400() throws Exception {
+        identidade("motorista-1", usuario(1, "MOTORISTA"));
+
+        try (MockedStatic<FirebaseAuth> scope = firebase("valido", "motorista-1")) {
+            mvc.perform(put("/turmas/ID_TESTE")
+                    .header("Authorization", "Bearer valido")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        verifyNoInteractions(turmaService);
+    }
+
+    @Test
+    void idInvalidoNoDeleteRecebe400() throws Exception {
+        identidade("motorista-1", usuario(1, "MOTORISTA"));
+
+        try (MockedStatic<FirebaseAuth> scope = firebase("valido", "motorista-1")) {
+            mvc.perform(delete("/turmas/ID_TESTE")
+                    .header("Authorization", "Bearer valido"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        verifyNoInteractions(turmaService);
+    }
 }

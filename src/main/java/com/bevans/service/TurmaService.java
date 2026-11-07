@@ -233,44 +233,6 @@ public class TurmaService {
                 .collect(Collectors.toList());
     }
 
-    public void adicionarAluno(
-            Long turmaId,
-            Long alunoId
-    ) {
-        Turma turma = turmaRepository
-                .findById(turmaId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Turma não encontrada."
-                        )
-                );
-
-        Usuario aluno = usuarioRepository
-                .findById(alunoId)
-                .orElseThrow(() ->
-                        new IllegalArgumentException(
-                                "Aluno não encontrado."
-                        )
-                );
-
-        AlunoTurma vinculo = alunoTurmaRepository
-                .findByTurmaIdAndAlunoId(
-                        turmaId,
-                        alunoId
-                )
-                .orElse(null);
-
-        if (vinculo == null) {
-            vinculo = new AlunoTurma();
-            vinculo.setTurma(turma);
-            vinculo.setAluno(aluno);
-        }
-
-        vinculo.setStatus("APROVADO");
-
-        alunoTurmaRepository.save(vinculo);
-    }
-
     public void removerAluno(
             Long turmaId,
             Long alunoId
@@ -491,10 +453,26 @@ public class TurmaService {
                 );
     }
 
+    @Transactional
     public void analisarSolicitacao(
             Long vinculoId,
             String status
     ) {
+        if (status == null) {
+            throw new IllegalArgumentException(
+                    "Informe APROVADO ou REJEITADO."
+            );
+        }
+
+        String novoStatus = status.trim().toUpperCase(java.util.Locale.ROOT);
+
+        if (!"APROVADO".equals(novoStatus)
+                && !"REJEITADO".equals(novoStatus)) {
+            throw new IllegalArgumentException(
+                    "Status inválido. Use APROVADO ou REJEITADO."
+            );
+        }
+
         AlunoTurma vinculo = alunoTurmaRepository
                 .findById(vinculoId)
                 .orElseThrow(() ->
@@ -503,7 +481,13 @@ public class TurmaService {
                         )
                 );
 
-        vinculo.setStatus(status);
+        if (!"PENDENTE".equals(vinculo.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Somente solicitações pendentes podem ser analisadas."
+            );
+        }
+
+        vinculo.setStatus(novoStatus);
         alunoTurmaRepository.save(vinculo);
     }
 

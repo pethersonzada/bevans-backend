@@ -122,6 +122,18 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(RecursoNaoEncontradoException.class)
+    public ResponseEntity<Object> recursoNaoEncontrado(
+            RecursoNaoEncontradoException ex,
+            WebRequest request
+    ) {
+        return resposta(
+                HttpStatus.NOT_FOUND,
+                ex.getMessage(),
+                request
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> erroInterno(
             Exception ex,

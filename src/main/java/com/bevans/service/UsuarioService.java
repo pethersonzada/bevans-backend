@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.google.firebase.auth.FirebaseAuth;
+import com.bevans.exception.RecursoNaoEncontradoException;
 import com.bevans.model.Usuario;
 import com.bevans.repository.PresencaRepository;
 import com.bevans.repository.UsuarioRepository;
@@ -38,7 +39,7 @@ public class UsuarioService {
     public Usuario buscarPorId(Long id) {
         if (id == null) throw new RuntimeException("id não pode ser nulo");
         return usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado"));
     }
 
     public List<Usuario> listarPassageiros() {
@@ -62,7 +63,7 @@ public class UsuarioService {
         }
 
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado no sistema."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado no sistema."));
 
         usuario.setEmail(novoEmail.trim());
         return usuarioRepository.save(usuario);
@@ -73,7 +74,7 @@ public class UsuarioService {
         if (id == null) throw new RuntimeException("O ID fornecido para exclusão não pode ser nulo.");
 
         Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado no sistema."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado no sistema."));
         
         if ("MOTORISTA".equals(usuario.getTipo())) {
             if (viagemRepository.existsByTurmaMotoristaIdAndStatus(id, "EM_ANDAMENTO")) {

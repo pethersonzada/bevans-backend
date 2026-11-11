@@ -248,7 +248,10 @@ public class RotaService {
                             isVolta
                     );
 
-            if (enderecoEscolhido == null) {
+            if (enderecoEscolhido == null
+                    || enderecoEscolhido.getUsuario() == null
+                    || aluno.getId() == null
+                    || !aluno.getId().equals(enderecoEscolhido.getUsuario().getId())) {
                 continue;
             }
 

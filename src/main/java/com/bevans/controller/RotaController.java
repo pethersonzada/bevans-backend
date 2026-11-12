@@ -57,9 +57,6 @@ public class RotaController {
     private static final Map<Long, Map<String, Double>>
             localizacoesVans = new ConcurrentHashMap<>();
 
-    private static final Set<Long> rotasAtivas =
-            ConcurrentHashMap.newKeySet();
-
     public RotaController(
             PresencaRepository presencaRepository,
             UsuarioRepository usuarioRepository,
@@ -367,7 +364,6 @@ public class RotaController {
 
         viagemService.iniciarRota(turmaId, sentido);
 
-        rotasAtivas.add(turmaId);
         localizacoesVans.remove(turmaId);
 
         return ResponseEntity.ok(
@@ -386,7 +382,6 @@ public class RotaController {
     ) {
         viagemService.encerrarRota(turmaId);
 
-        rotasAtivas.remove(turmaId);
         localizacoesVans.remove(turmaId);
 
         return ResponseEntity.ok(
@@ -453,8 +448,17 @@ public class RotaController {
             @RequestParam Double latitude,
             @RequestParam Double longitude
     ) {
-        if (!rotasAtivas.contains(turmaId)) {
+        if (!viagemService.rotaAtiva(turmaId)) {
             throw new IllegalArgumentException("Rota inativa para esta turma.");
+        }
+
+        if (latitude == null || longitude == null
+                || !Double.isFinite(latitude)
+                || !Double.isFinite(longitude)
+                || latitude < -90 || latitude > 90
+                || longitude < -180 || longitude > 180) {
+            throw new IllegalArgumentException(
+                    "Coordenadas da van inválidas.");
         }
 
         Map<String, Double> coords =
@@ -476,7 +480,7 @@ public class RotaController {
     public ResponseEntity<Object> obterLocalizacaoVan(
             @RequestParam Long turmaId
     ) {
-        if (!rotasAtivas.contains(turmaId)
+        if (!viagemService.rotaAtiva(turmaId)
                 || !localizacoesVans.containsKey(turmaId)) {
             throw new RecursoNaoEncontradoException("Localização da van não encontrada.");
         }

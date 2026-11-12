@@ -6,6 +6,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -17,7 +19,16 @@ public class SwaggerConfig {
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
-            .components(new Components())
+            .components(new Components().addSecuritySchemes(
+                "firebaseAuth",
+                new SecurityScheme()
+                    .type(SecurityScheme.Type.HTTP)
+                    .scheme("bearer")
+                    .bearerFormat("JWT")
+                    .description("Firebase ID Token obtido após autenticação")
+            ))
+            .addSecurityItem(
+                new SecurityRequirement().addList("firebaseAuth"))
             .info(new Info()
                 .title("API Rota Estudantil")
                 .version("1.0.0")

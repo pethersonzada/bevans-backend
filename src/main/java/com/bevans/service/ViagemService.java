@@ -27,7 +27,7 @@ public class ViagemService {
 
     @Transactional
     public void iniciarRota(Long turmaId, String sentido) {
-        Turma turma = turmaRepository.findById(turmaId)
+        Turma turma = turmaRepository.findByIdForUpdate(turmaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada no sistema."));
 
         Optional<Viagem> viagemAtiva = viagemRepository.findFirstByTurmaIdAndStatus(turmaId, "EM_ANDAMENTO");
@@ -53,6 +53,12 @@ public class ViagemService {
             viagem.setStatus("FINALIZADA");
             viagemRepository.save(viagem);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public boolean rotaAtiva(Long turmaId) {
+        return viagemRepository.existsByTurmaIdAndStatus(
+                turmaId, "EM_ANDAMENTO");
     }
 
     @Transactional(readOnly = true)

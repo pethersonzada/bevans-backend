@@ -2,6 +2,8 @@ package com.bevans.repository;
 
 import com.bevans.model.*;
 import com.bevans.service.RotaService;
+import com.bevans.service.ViagemService;
+import com.bevans.exception.ConflitoException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -24,6 +26,7 @@ class PresencaRotaIntegrationTest {
     @Autowired PresencaRepository presencas;
     @Autowired TurmaRepository turmas;
     @Autowired EnderecoRepository enderecos;
+    @Autowired ViagemRepository viagens;
 
     private Usuario usuario(String nome, String tipo) {
         Usuario u = new Usuario();
@@ -131,4 +134,61 @@ class PresencaRotaIntegrationTest {
         em.clear();
         assertEquals(List.of(), service.otimizarRota("IDA", turmaId).join());
     }
+
+    @Test
+    void viagemContinuaAtivaAposRecriarServico() {
+        Turma t = turma(usuario("motorista-persistencia", "MOTORISTA"));
+        em.flush();
+
+        Long turmaId = t.getId();
+
+        ViagemService primeiro =
+                new ViagemService(viagens, turmas);
+
+        primeiro.iniciarRota(turmaId, "IDA");
+        em.flush();
+        em.clear();
+
+        ViagemService segundo =
+                new ViagemService(viagens, turmas);
+
+        assertEquals(true, segundo.rotaAtiva(turmaId));
+        assertEquals(
+                "ATIVA",
+                segundo.verificarStatusAtual(turmaId).get("status")
+        );
+
+        segundo.encerrarRota(turmaId);
+        em.flush();
+        em.clear();
+
+        ViagemService terceiro =
+                new ViagemService(viagens, turmas);
+
+        assertEquals(false, terceiro.rotaAtiva(turmaId));
+        assertEquals(
+                "INATIVA",
+                terceiro.verificarStatusAtual(turmaId).get("status")
+        );
+    }
+
+    @Test
+    void naoPermiteDuasViagensAtivasNaMesmaTurma() {
+        Turma t = turma(usuario("motorista-duplicidade", "MOTORISTA"));
+        em.flush();
+
+        ViagemService service =
+                new ViagemService(viagens, turmas);
+
+        service.iniciarRota(t.getId(), "IDA");
+        em.flush();
+        em.clear();
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                ConflitoException.class,
+                () -> new ViagemService(viagens, turmas)
+                        .iniciarRota(t.getId(), "VOLTA")
+        );
+    }
+
 }

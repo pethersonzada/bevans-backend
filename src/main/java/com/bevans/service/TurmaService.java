@@ -1,6 +1,10 @@
 
 package com.bevans.service;
 
+import com.bevans.exception.ConflitoException;
+
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -147,7 +151,7 @@ public class TurmaService {
         Usuario motorista = usuarioRepository
                 .findById(turma.getMotorista().getId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Motorista não encontrado."
                         )
                 );
@@ -243,7 +247,7 @@ public class TurmaService {
                         alunoId
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Vínculo não encontrado."
                         )
                 );
@@ -290,7 +294,7 @@ public class TurmaService {
         Turma turma = turmaRepository
                 .findById(turmaId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );
@@ -405,7 +409,7 @@ public class TurmaService {
         Usuario aluno = usuarioRepository
                 .findById(alunoId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Aluno não encontrado."
                         )
                 );
@@ -426,13 +430,13 @@ public class TurmaService {
         if (vinculo != null) {
 
             if ("APROVADO".equals(vinculo.getStatus())) {
-                throw new IllegalArgumentException(
+                throw new ConflitoException(
                         "Você já participa desta turma."
                 );
             }
 
             if ("PENDENTE".equals(vinculo.getStatus())) {
-                throw new IllegalArgumentException(
+                throw new ConflitoException(
                         "Sua solicitação já está pendente."
                 );
             }
@@ -482,13 +486,13 @@ public class TurmaService {
         AlunoTurma vinculo = alunoTurmaRepository
                 .findById(vinculoId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Solicitação não encontrada."
                         )
                 );
 
         if (!"PENDENTE".equals(vinculo.getStatus())) {
-            throw new IllegalArgumentException(
+            throw new ConflitoException(
                     "Somente solicitações pendentes podem ser analisadas."
             );
         }
@@ -503,7 +507,7 @@ public class TurmaService {
         Turma turma = turmaRepository
                 .findById(turmaId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );
@@ -523,7 +527,7 @@ public class TurmaService {
         Turma turma = turmaRepository
                 .findById(turmaId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );

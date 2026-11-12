@@ -1,5 +1,11 @@
 package com.bevans.controller;
 
+import com.bevans.exception.ConflitoException;
+
+import org.springframework.security.access.AccessDeniedException;
+
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
@@ -99,16 +105,21 @@ listarPassageiros() {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Usuario> getMotorista() {
         Usuario motorista = access.motoristaVisivel();
-        return motorista == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(motorista);
+        if (motorista == null) {
+            throw new RecursoNaoEncontradoException("Motorista não encontrado.");
+        }
+        return ResponseEntity.ok(motorista);
     }
 
     @Operation(summary = "Buscar por Firebase UID", description = "Retorna os dados do usuário com base no UID do Firebase Authentication.")
     @GetMapping("/por-uid/{firebaseUid}")
     @PreAuthorize("@access.ownsUid(#p0)")
     public ResponseEntity<Usuario> buscarPorFirebaseUid(@PathVariable String firebaseUid) {
-        return usuarioRepository.findByFirebaseUid(firebaseUid)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.status(404).build());
+        Usuario usuario = usuarioRepository.findByFirebaseUid(firebaseUid)
+                .orElseThrow(() -> new RecursoNaoEncontradoException(
+                        "Usuário não encontrado."
+                ));
+        return ResponseEntity.ok(usuario);
     }
 
     @Operation(summary = "Cadastrar Usuário autenticado no Firebase")
@@ -127,13 +138,11 @@ listarPassageiros() {
         if (uid == null || firebaseEmail == null
                 || !Objects.equals(uid, uidInformado)
                 || !firebaseEmail.equalsIgnoreCase(emailInformado)) {
-            return ResponseEntity.status(403).body(
-                    Map.of("erro", "Dados não correspondem ao token Firebase."));
+            throw new AccessDeniedException("Dados não correspondem ao token Firebase.");
         }
 
         if (!"PASSAGEIRO".equals(tipo) && !"MOTORISTA".equals(tipo)) {
-            return ResponseEntity.badRequest().body(
-                    Map.of("erro", "Tipo de usuário inválido."));
+            throw new IllegalArgumentException("Tipo de usuário inválido.");
         }
 
         // A autorização de motorista deve vir do servidor.
@@ -143,14 +152,12 @@ listarPassageiros() {
             String codigoRecebido = valor(payload, "codigoAcesso");
             if (codigoServidor == null || codigoServidor.isBlank()
                     || !codigoServidor.equals(codigoRecebido)) {
-                return ResponseEntity.status(403).body(
-                        Map.of("erro", "Cadastro de motorista não autorizado."));
+                throw new AccessDeniedException("Cadastro de motorista não autorizado.");
             }
         }
 
         if (usuarioRepository.findByFirebaseUid(uid).isPresent()) {
-            return ResponseEntity.status(409).body(
-                    Map.of("erro", "Identidade Firebase já cadastrada."));
+            throw new ConflitoException("Identidade Firebase já cadastrada.");
         }
 
         Usuario novoUsuario = new Usuario();
@@ -164,8 +171,7 @@ listarPassageiros() {
         novoUsuario.setLongitude(0.0);
 
         if (novoUsuario.getNome().isBlank() || novoUsuario.getTelefone().isBlank()) {
-            return ResponseEntity.badRequest().body(
-                    Map.of("erro", "Nome e telefone são obrigatórios."));
+            throw new IllegalArgumentException("Nome e telefone são obrigatórios.");
         }
         return ResponseEntity.ok(usuarioService.cadastrarUsuario(novoUsuario));
     }
@@ -181,10 +187,10 @@ listarPassageiros() {
     public ResponseEntity<?> atualizarEndereco(@RequestBody EnderecoRequest request) {
         Long idUsuario = request.getIdUsuario();
         if (idUsuario == null) {
-            return ResponseEntity.badRequest().body("idUsuario não pode ser nulo");
+            throw new IllegalArgumentException("idUsuario não pode ser nulo");
         }
         Usuario usuario = usuarioRepository.findById(idUsuario)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado: " + idUsuario));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado: " + idUsuario));
         usuario.setLatitude(request.getLatitude());
         usuario.setLongitude(request.getLongitude());
         usuario.setEnderecoCompleto(request.getEnderecoCompleto());
@@ -196,26 +202,16 @@ listarPassageiros() {
     @PutMapping("/{id}/email")
     @PreAuthorize("@access.own(#p0)")
     public ResponseEntity<?> atualizarEmail(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        try {
-            String novoEmail = body.get("email");
-            Usuario usuarioAtualizado = usuarioService.atualizarEmail(id, novoEmail);
-            return ResponseEntity.ok(usuarioAtualizado);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("erro", e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("erro", "Erro interno: " + e.getMessage()));
-        }
+        String novoEmail = body.get("email");
+        Usuario usuarioAtualizado = usuarioService.atualizarEmail(id, novoEmail);
+        return ResponseEntity.ok(usuarioAtualizado);
     }
 
     @Operation(summary = "Excluir Usuário", description = "Apaga permanentemente a conta do usuário do sistema.")
     @DeleteMapping("/{id}")
     @PreAuthorize("@access.own(#p0)")
     public ResponseEntity<?> excluirConta(@PathVariable Long id) {
-        try {
-            usuarioService.excluirUsuario(id);
-            return ResponseEntity.ok(Map.of("mensagem", "Conta excluída com sucesso."));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("erro", e.getMessage()));
-        }
+        usuarioService.excluirUsuario(id);
+        return ResponseEntity.ok(Map.of("mensagem", "Conta excluída com sucesso."));
     }
 }

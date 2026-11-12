@@ -1,5 +1,7 @@
 package com.bevans.service;
 
+import com.bevans.exception.ConflitoException;
+
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -27,17 +29,17 @@ public class UsuarioService {
 
     public Usuario cadastrarUsuario(Usuario usuario) {
         if (usuarioRepository.findByEmail(usuario.getEmail()).isPresent()) {
-            throw new RuntimeException("E-mail já cadastrado");
+            throw new ConflitoException("E-mail já cadastrado");
         }
         if (usuarioRepository.findByTelefone(usuario.getTelefone()).isPresent()) {
-            throw new RuntimeException("Telefone já cadastrado");
+            throw new ConflitoException("Telefone já cadastrado");
         }
         
         return usuarioRepository.save(usuario);
     }
 
     public Usuario buscarPorId(Long id) {
-        if (id == null) throw new RuntimeException("id não pode ser nulo");
+        if (id == null) throw new IllegalArgumentException("id não pode ser nulo");
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado"));
     }
@@ -52,14 +54,14 @@ public class UsuarioService {
     @Transactional
     public Usuario atualizarEmail(Long id, String novoEmail) {
         if (id == null) {
-            throw new RuntimeException("O ID não pode ser nulo.");
+            throw new IllegalArgumentException("O ID não pode ser nulo.");
         }
         if (novoEmail == null || novoEmail.trim().isEmpty()) {
-            throw new RuntimeException("O novo e-mail não pode estar vazio.");
+            throw new IllegalArgumentException("O novo e-mail não pode estar vazio.");
         }
 
         if (usuarioRepository.findByEmail(novoEmail).isPresent()) {
-            throw new RuntimeException("Este e-mail já está em uso por outro usuário.");
+            throw new ConflitoException("Este e-mail já está em uso por outro usuário.");
         }
 
         Usuario usuario = usuarioRepository.findById(id)
@@ -71,14 +73,14 @@ public class UsuarioService {
 
     @Transactional
     public void excluirUsuario(Long id) {
-        if (id == null) throw new RuntimeException("O ID fornecido para exclusão não pode ser nulo.");
+        if (id == null) throw new IllegalArgumentException("O ID fornecido para exclusão não pode ser nulo.");
 
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado no sistema."));
         
         if ("MOTORISTA".equals(usuario.getTipo())) {
             if (viagemRepository.existsByTurmaMotoristaIdAndStatus(id, "EM_ANDAMENTO")) {
-                throw new RuntimeException("Não é possível excluir a conta com uma rota em andamento. Encerre a viagem primeiro.");
+                throw new ConflitoException("Não é possível excluir a conta com uma rota em andamento. Encerre a viagem primeiro.");
             }
             viagemRepository.deleteAllByTurmaMotoristaId(id);
         }
@@ -88,7 +90,7 @@ public class UsuarioService {
                 FirebaseAuth.getInstance().deleteUser(usuario.getFirebaseUid());
             }
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao excluir o utilizador no Firebase: " + e.getMessage());
+            throw new IllegalStateException("Falha na exclusão da conta no Firebase.", e);
         }
 
         presencaRepository.deleteAllByUsuarioId(id); 

@@ -56,11 +56,18 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .httpBasic(b -> b.disable())
             .formLogin(f -> f.disable())
-            .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
-                response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                response.setContentType("application/json;charset=UTF-8");
-                response.getWriter().write("{\"erro\":\"Autenticação obrigatória.\"}");
-            }))
+            .exceptionHandling(e -> e
+                .authenticationEntryPoint((request, response, ex) ->
+                        HttpErrorWriter.write(
+                                request, response, 401,
+                                "Autenticação obrigatória."
+                        ))
+                .accessDeniedHandler((request, response, ex) ->
+                        HttpErrorWriter.write(
+                                request, response, 403,
+                                "Acesso negado ao recurso."
+                        ))
+            )
             .authorizeHttpRequests(a -> a
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/health").permitAll()

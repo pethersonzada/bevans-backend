@@ -1,5 +1,9 @@
 package com.bevans.service;
 
+import com.bevans.exception.ConflitoException;
+
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -24,12 +28,12 @@ public class ViagemService {
     @Transactional
     public void iniciarRota(Long turmaId, String sentido) {
         Turma turma = turmaRepository.findById(turmaId)
-                .orElseThrow(() -> new RuntimeException("Turma não encontrada no sistema."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada no sistema."));
 
         Optional<Viagem> viagemAtiva = viagemRepository.findFirstByTurmaIdAndStatus(turmaId, "EM_ANDAMENTO");
         
         if (viagemAtiva.isPresent()) {
-            throw new RuntimeException("Já existe uma rota em andamento exclusivamente para esta turma.");
+            throw new ConflitoException("Já existe uma rota em andamento exclusivamente para esta turma.");
         }
 
         Viagem novaViagem = new Viagem();

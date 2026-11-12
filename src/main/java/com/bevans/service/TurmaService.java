@@ -187,6 +187,22 @@ public class TurmaService {
             );
         }
 
+        // Permite criar um rascunho antes da seleção no mapa.
+        // Uma origem ou destino informado continua exigindo validação.
+        boolean semOrigem = turma.getOrigemLatitude() == null
+                && turma.getOrigemLongitude() == null
+                && (turma.getOrigemNome() == null
+                    || turma.getOrigemNome().isBlank());
+
+        boolean semDestino = turma.getDestinoLatitude() == null
+                && turma.getDestinoLongitude() == null
+                && (turma.getDestinoNome() == null
+                    || turma.getDestinoNome().isBlank());
+
+        if (semOrigem && semDestino) {
+            return turmaRepository.save(turma);
+        }
+
         // Validar destino antes de persistir.
 
         double[] destino = resolverCoordenadas(

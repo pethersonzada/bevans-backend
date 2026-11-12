@@ -174,4 +174,61 @@ class TurmaServiceCoordenadasTest {
 
         verify(turmas, never()).save(any(Turma.class));
     }
+
+    @Test
+    void criaRascunhoSemOrigemEDestino() {
+        Usuario motorista = new Usuario();
+        motorista.setId(1L);
+        motorista.setTipo("MOTORISTA");
+
+        when(usuarios.findById(1L))
+                .thenReturn(Optional.of(motorista));
+        when(turmas.save(any(Turma.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Turma nova = new Turma();
+        nova.setNome("Turma em configuração");
+        nova.setMotorista(motorista);
+
+        Turma salva = service.criarTurma(nova);
+
+        assertNull(salva.getOrigemLatitude());
+        assertNull(salva.getDestinoLatitude());
+        verify(turmas).save(nova);
+        verifyNoInteractions(geocoding);
+    }
+
+    @Test
+    void atualizaOrigemEDestinoDeRascunho() {
+        Turma turma = new Turma();
+        turma.setId(13L);
+        turma.setNome("Turma em configuração");
+
+        when(turmas.findById(13L))
+                .thenReturn(Optional.of(turma));
+        when(turmas.save(any(Turma.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Turma origem = new Turma();
+        origem.setOrigemNome("Garagem");
+        origem.setOrigemLatitude(-8.23);
+        origem.setOrigemLongitude(-35.75);
+
+        service.atualizarTurma(13L, origem);
+
+        Turma destino = new Turma();
+        destino.setDestinoNome("Universidade");
+        destino.setDestinoLatitude(-8.30);
+        destino.setDestinoLongitude(-35.99);
+
+        Turma salva = service.atualizarTurma(13L, destino);
+
+        assertEquals(-8.23, salva.getOrigemLatitude());
+        assertEquals(-35.75, salva.getOrigemLongitude());
+        assertEquals(-8.30, salva.getDestinoLatitude());
+        assertEquals(-35.99, salva.getDestinoLongitude());
+        verify(turmas, times(2)).save(turma);
+        verifyNoInteractions(geocoding);
+    }
+
 }

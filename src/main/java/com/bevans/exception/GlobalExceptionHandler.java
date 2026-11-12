@@ -140,6 +140,14 @@ public class GlobalExceptionHandler {
         return resposta(HttpStatus.CONFLICT, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(EndpointLegadoException.class)
+    public ResponseEntity<Object> endpointLegado(
+            EndpointLegadoException ex,
+            WebRequest request
+    ) {
+        return resposta(HttpStatus.GONE, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> erroInterno(
             Exception ex,

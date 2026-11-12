@@ -40,19 +40,46 @@ public class SecurityConfig {
         return registration;
     }
 
+    @Bean(name = "corsFilter")
+    public org.springframework.web.filter.CorsFilter corsFilter() {
+        org.springframework.web.filter.CorsFilter filter =
+                new org.springframework.web.filter.CorsFilter(request -> {
+                    CorsConfiguration config = new CorsConfiguration();
+                    config.setAllowedOrigins(
+                            Arrays.stream(allowedOrigins.split(","))
+                                    .map(String::trim)
+                                    .filter(origin -> !origin.isBlank())
+                                    .toList()
+                    );
+                    config.setAllowedMethods(
+                            List.of("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                    );
+                    config.setAllowedHeaders(
+                            List.of("Authorization", "Content-Type",
+                                    "Accept", "Bypass-Tunnel-Reminder")
+                    );
+                    return config;
+                });
+
+        filter.setCorsProcessor(new JsonCorsProcessor());
+        return filter;
+    }
+
+    @Bean
+    public FilterRegistrationBean<org.springframework.web.filter.CorsFilter>
+    corsFilterRegistration(
+            org.springframework.web.filter.CorsFilter corsFilter
+    ) {
+        FilterRegistrationBean<org.springframework.web.filter.CorsFilter>
+                registration = new FilterRegistrationBean<>(corsFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
-            .cors(cors -> cors.configurationSource(request -> {
-                CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
-                        .map(String::trim)
-                        .filter(origin -> !origin.isBlank())
-                        .toList());
-                config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-                config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Bypass-Tunnel-Reminder"));
-                return config;
-            }))
+            .cors(org.springframework.security.config.Customizer.withDefaults())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .httpBasic(b -> b.disable())
             .formLogin(f -> f.disable())

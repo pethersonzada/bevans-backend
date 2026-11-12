@@ -286,14 +286,6 @@ public class RotaService {
             lonsList.add(lonFinal);
         }
 
-        // 6. Nenhum passageiro confirmado para este sentido.
-
-        if (passageirosDTO.isEmpty()) {
-            return CompletableFuture.completedFuture(
-                    new ArrayList<>()
-            );
-        }
-
         // 7. Validar destino da turma.
 
         Double destinoLat = turma.getDestinoLatitude();
@@ -306,6 +298,14 @@ public class RotaService {
             throw new IllegalArgumentException(
                     "A turma não possui coordenadas de "
                     + "destino válidas."
+            );
+        }
+
+        // 6. Nenhum passageiro confirmado para este sentido.
+
+        if (passageirosDTO.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                    new ArrayList<>()
             );
         }
 

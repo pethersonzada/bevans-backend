@@ -31,7 +31,7 @@ class FavoritoIntegrationTest {
     }
     private RotaDono rota() {
         Usuario dono=usuario("MOTORISTA");Turma t=new Turma();t.setNome("Turma");t.setTurno("NOITE");t.setCapacidade(12);t.setMotorista(dono);t=turmas.criarTurma(t);
-        var d=new RotaPublicaRequest(t.getId(),"Rota "+t.getId(),"Caruaru",CategoriaRota.OUTROS,ModoRota.FIXA,"Terminal",-8.2,-35.9,"Campus",-8.3,-36.0,null,null,null,Set.of(DayOfWeek.MONDAY),LocalTime.of(7,0),null);
+        var d=new RotaPublicaRequest(t.getId(),"Rota "+UUID.randomUUID(),"Caruaru",CategoriaRota.OUTROS,ModoRota.FIXA,"Terminal",-8.2,-35.9,"Campus",-8.3,-36.0,null,null,null,Set.of(DayOfWeek.MONDAY),LocalTime.of(7,0),null);
         var r=rotas.criar(dono.getId(),d);rotas.publicar(r.id(),dono.getId(),true);return new RotaDono(r.id(),dono.getId());
     }
     private FiltroCatalogo filtro(){return new FiltroCatalogo(null,null,null,null,null,null,null,null,false);}
@@ -45,8 +45,10 @@ class FavoritoIntegrationTest {
     @Test void favoritosEFlagsNaoVazamEntreContas() {
         var r=rota();Long a=usuario("PASSAGEIRO").getId(),b=usuario("PASSAGEIRO").getId();service.favoritar(a,r.id());service.remover(b,r.id());
         assertEquals(1,service.listar(a,0,20).total());assertEquals(0,service.listar(b,0,20).total());
-        assertTrue(catalogo.buscar(filtro(),0,20,a,false).itens().stream().filter(v->v.id().equals(r.id())).findFirst().orElseThrow().favorita());
-        assertFalse(catalogo.buscar(filtro(),0,20,b,false).itens().stream().filter(v->v.id().equals(r.id())).findFirst().orElseThrow().favorita());
+        // Schema PostgreSQL é reutilizável: a rota nova pode estar além da primeira página.
+        var exclusivo=new FiltroCatalogo(rotas.consultar(r.id()).nome(),null,null,null,null,null,null,null,false);
+        assertTrue(catalogo.buscar(exclusivo,0,20,a,false).itens().stream().filter(v->v.id().equals(r.id())).findFirst().orElseThrow().favorita());
+        assertFalse(catalogo.buscar(exclusivo,0,20,b,false).itens().stream().filter(v->v.id().equals(r.id())).findFirst().orElseThrow().favorita());
     }
     @Test void despublicadaFicaOcultaESomenteReapareceSeRepublicada() {
         var r=rota();Long aluno=usuario("PASSAGEIRO").getId();service.favoritar(aluno,r.id());

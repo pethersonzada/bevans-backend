@@ -21,7 +21,9 @@ class CapacidadeMigrationPostgresIT {
                 s.execute("insert into aluno_turma values(11,7,'APROVADO')");
             }
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/001-capacidade-turma.sql"));
+            ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/002-rotas-publicas.sql"));
             try(var s=c.createStatement()) {
+                try(var rs=s.executeQuery("select count(*) from rotas_publicas")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
                 try(var rs=s.executeQuery("select t.id,t.capacidade,a.id from turmas t join aluno_turma a on t.id=a.turma_id")) {
                     assertTrue(rs.next());assertEquals(7,rs.getLong(1));assertNull(rs.getObject(2));assertEquals(11,rs.getLong(3));
                 }

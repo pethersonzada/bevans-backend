@@ -139,4 +139,9 @@ public class GlobalExceptionHandler {
                 request
         );
     }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Object> statusDeDominio(org.springframework.web.server.ResponseStatusException ex, WebRequest request) {
+        return resposta(HttpStatus.valueOf(ex.getStatusCode().value()), ex.getReason()==null?"Recurso indisponível.":ex.getReason(), request);
+    }
 }

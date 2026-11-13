@@ -15,7 +15,8 @@ import java.util.stream.Collectors;
 public class CatalogoService {
     private final RotaPublicaRepository rotas;
     private final AlunoTurmaRepository vinculos;
-    public CatalogoService(RotaPublicaRepository rotas,AlunoTurmaRepository vinculos){this.rotas=rotas;this.vinculos=vinculos;}
+    private final FavoritoRepository favoritos;
+    public CatalogoService(RotaPublicaRepository rotas,AlunoTurmaRepository vinculos,FavoritoRepository favoritos){this.rotas=rotas;this.vinculos=vinculos;this.favoritos=favoritos;}
     private String filtro(String s) {
         if(s==null||s.isBlank())return null;
         if(s.length()>160)throw new IllegalArgumentException("Filtro deve ter até 160 caracteres.");return s.trim();
@@ -53,15 +54,30 @@ public class CatalogoService {
     }
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public PaginaDTO<CatalogoRotaDTO> buscar(FiltroCatalogo f,int pagina,int tamanho) {
+        return buscar(f,pagina,tamanho,null,false);
+    }
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public PaginaDTO<CatalogoRotaDTO> buscar(FiltroCatalogo f,int pagina,int tamanho,Long usuarioId,boolean somenteFavoritas) {
         if(pagina<0||pagina>10000||tamanho<1||tamanho>50)throw new IllegalArgumentException("Página deve ser 0..10000 e tamanho 1..50.");
-        Page<RotaPublica> page=rotas.findAll(especificacao(f),PageRequest.of(pagina,tamanho,Sort.by(Sort.Direction.ASC,"id")));
+        Specification<RotaPublica> spec=especificacao(f);
+        if(somenteFavoritas) {
+            if(usuarioId==null)throw new org.springframework.security.access.AccessDeniedException("Sessão inválida.");
+            spec=spec.and((r,query,b)->{
+                Subquery<Long> sub=query.subquery(Long.class);Root<FavoritoRota> favorito=sub.from(FavoritoRota.class);
+                sub.select(favorito.get("id")).where(b.equal(favorito.get("usuario").get("id"),usuarioId),b.equal(favorito.get("rota").get("id"),r.get("id")),b.isTrue(favorito.get("ativo")));
+                return b.exists(sub);
+            });
+        }
+        Page<RotaPublica> page=rotas.findAll(spec,PageRequest.of(pagina,tamanho,Sort.by(Sort.Direction.ASC,"id")));
         List<Long> ids=page.getContent().stream().map(r->r.getTurma().getId()).toList();
         Map<Long,Long> ocupacao=ids.isEmpty()?Map.of():vinculos.ocupacaoDasTurmas(ids).stream().collect(Collectors.toMap(AlunoTurmaRepository.OcupacaoTurma::getTurmaId,AlunoTurmaRepository.OcupacaoTurma::getOcupados));
+        Set<Long> favoritas=usuarioId==null||page.isEmpty()?Set.of():favoritos.findByUsuarioIdAndAtivoTrueAndRotaIdIn(usuarioId,page.getContent().stream().map(RotaPublica::getId).toList())
+                .stream().map(fav->fav.getRota().getId()).collect(Collectors.toSet());
         List<CatalogoRotaDTO> itens=page.getContent().stream().map(r->{
             Turma t=r.getTurma();long usados=ocupacao.getOrDefault(t.getId(),0L);Integer cap=t.getCapacidade();
             return new CatalogoRotaDTO(r.getId(),t.getId(),r.getNome(),t.getMotorista()==null?null:t.getMotorista().getNome(),r.getCidade(),r.getCategoria(),r.getModo(),
                     r.getDestinoNome(),r.getCampus(),r.getRegiao(),t.getTurno(),r.getDias().stream().sorted().toList(),r.getHorarioIda(),r.getHorarioVolta(),
-                    new VagasTurmaDTO(cap,usados,cap==null?null:Math.max(0L,cap.longValue()-usados),cap!=null));
+                    new VagasTurmaDTO(cap,usados,cap==null?null:Math.max(0L,cap.longValue()-usados),cap!=null),favoritas.contains(r.getId()));
         }).toList();
         return new PaginaDTO<>(itens,page.getTotalElements(),page.getNumber(),page.getSize(),page.getTotalPages());
     }

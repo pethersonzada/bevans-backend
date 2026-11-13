@@ -166,6 +166,6 @@ public class RotaPublicaService {
         return new RotaPublicaDTO(r.getId(),r.getTurma().getId(),r.getNome(),r.getCidade(),r.getCategoria(),r.getModo(),r.getOrigemNome(),
                 r.getOrigemLatitude(),r.getOrigemLongitude(),r.getDestinoNome(),r.getDestinoLatitude(),r.getDestinoLongitude(),r.getDescricao(),
                 r.getRegiao(),r.getCampus(),Set.copyOf(r.getDias()),r.getHorarioIda(),r.getHorarioVolta(),r.getPublicada(),r.getAtiva(),
-                turmaService.consultarVagas(r.getTurma().getId()),pontos);
+                turmaService.consultarVagas(r.getTurma().getId()),pontos,false);
     }
 }

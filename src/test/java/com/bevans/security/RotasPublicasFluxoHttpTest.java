@@ -66,6 +66,18 @@ class RotasPublicasFluxoHttpTest {
             mvc.perform(get("/rotas-publicas/catalogo")).andExpect(status().isUnauthorized());
             mvc.perform(get("/rotas-publicas/catalogo").header("Authorization","Bearer passenger-http").param("tamanho","51"))
                     .andExpect(status().isBadRequest());
+            for(int i=0;i<2;i++)mvc.perform(put("/rotas-publicas/"+id+"/favorito").header("Authorization","Bearer passenger-http").contentType("application/json").content("{\"usuarioId\":999}"))
+                    .andExpect(status().isNoContent());
+            mvc.perform(get("/rotas-publicas/favoritas").header("Authorization","Bearer passenger-http")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
+            mvc.perform(get("/rotas-publicas/favoritas").header("Authorization","Bearer other-http")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+            mvc.perform(get("/rotas-publicas/"+id).header("Authorization","Bearer passenger-http")).andExpect(status().isOk()).andExpect(jsonPath("$.favorita").value(true));
+            mvc.perform(get("/rotas-publicas/"+id).header("Authorization","Bearer other-http")).andExpect(status().isOk()).andExpect(jsonPath("$.favorita").value(false));
+            mvc.perform(get("/rotas-publicas/catalogo").header("Authorization","Bearer passenger-http").param("somenteFavoritas","true"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.itens[0].favorita").value(true));
+            mvc.perform(put("/rotas-publicas/"+id+"/favorito").header("Authorization","Bearer driver-http")).andExpect(status().isForbidden());
+            mvc.perform(get("/rotas-publicas/favoritas")).andExpect(status().isUnauthorized());
+            for(int i=0;i<2;i++)mvc.perform(delete("/rotas-publicas/"+id+"/favorito").header("Authorization","Bearer passenger-http")).andExpect(status().isNoContent());
+            mvc.perform(get("/rotas-publicas/favoritas").header("Authorization","Bearer passenger-http")).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
             var pedido=mvc.perform(post("/rotas-publicas/"+id+"/solicitacoes").header("Authorization","Bearer passenger-http"))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDENTE")).andReturn();
             long vinculo=json.readTree(pedido.getResponse().getContentAsString()).get("id").asLong();

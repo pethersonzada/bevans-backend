@@ -15,7 +15,8 @@ import java.util.List;
 public class RotaPublicaController {
     private final RotaPublicaService service;
     private final AccessPolicy access;
-    public RotaPublicaController(RotaPublicaService service,AccessPolicy access){this.service=service;this.access=access;}
+    private final com.bevans.service.FavoritoService favoritos;
+    public RotaPublicaController(RotaPublicaService service,AccessPolicy access,com.bevans.service.FavoritoService favoritos){this.service=service;this.access=access;this.favoritos=favoritos;}
 
     @PostMapping @PreAuthorize("@access.isMotorista()")
     @Operation(summary="Criar configuração privada de rota urbana",description="Não publica automaticamente; turmaId deve pertencer ao motorista autenticado.")
@@ -26,7 +27,9 @@ public class RotaPublicaController {
 
     @GetMapping("/{id}") @PreAuthorize("@rotasPublicasAccess.canRead(#p0)")
     @Operation(summary="Detalhes permitidos da rota",description="Sem telefones, passageiros, endereços privados da turma ou GPS.")
-    public RotaPublicaDTO consultar(@PathVariable Long id){return service.consultar(id);}
+    public RotaPublicaDTO consultar(@PathVariable Long id){
+        var usuario=access.usuario();return service.consultar(id).comFavorita(favoritos.favorita(usuario==null?null:usuario.getId(),id));
+    }
 
     @PutMapping("/{id}") @PreAuthorize("@rotasPublicasAccess.own(#p0)")
     public RotaPublicaDTO atualizar(@PathVariable Long id,@RequestBody RotaPublicaRequest dados){return service.atualizar(id,access.usuario().getId(),dados);}

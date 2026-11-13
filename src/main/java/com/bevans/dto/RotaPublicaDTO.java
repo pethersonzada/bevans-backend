@@ -6,4 +6,10 @@ public record RotaPublicaDTO(Long id, Long turmaId, String nome, String cidade, 
         ModoRota modo, String origemNome, Double origemLatitude, Double origemLongitude,
         String destinoNome, Double destinoLatitude, Double destinoLongitude, String descricao,
         String regiao, String campus, Set<DayOfWeek> dias, LocalTime horarioIda, LocalTime horarioVolta,
-        boolean publicada, boolean ativa, VagasTurmaDTO vagas, List<ParadaPublicaDTO> paradas) {}
+        boolean publicada, boolean ativa, VagasTurmaDTO vagas, List<ParadaPublicaDTO> paradas, boolean favorita) {
+    public RotaPublicaDTO comFavorita(boolean valor) {
+        return new RotaPublicaDTO(id,turmaId,nome,cidade,categoria,modo,origemNome,origemLatitude,origemLongitude,
+                destinoNome,destinoLatitude,destinoLongitude,descricao,regiao,campus,dias,horarioIda,horarioVolta,
+                publicada,ativa,vagas,paradas,valor);
+    }
+}

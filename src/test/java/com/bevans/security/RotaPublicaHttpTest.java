@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class RotaPublicaHttpTest extends BaseAutorizacaoHttpTest {
     @MockBean RotaPublicaRepository publicas;
     @MockBean RotaPublicaService service;
+    @MockBean com.bevans.service.FavoritoService favoritos;
     private void rota(boolean publicada) {
         RotaPublica r=new RotaPublica();r.setId(9L);r.setTurma(turma(7,usuario(1,"MOTORISTA")));r.setPublicada(publicada);r.setAtiva(true);
         when(publicas.findById(9L)).thenReturn(Optional.of(r));

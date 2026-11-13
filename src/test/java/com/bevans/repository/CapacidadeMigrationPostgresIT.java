@@ -25,6 +25,7 @@ class CapacidadeMigrationPostgresIT {
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/002-rotas-publicas.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/003-embarques.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/004-catalogo-indices.sql"));
+            ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/005-favoritos.sql"));
             try(var s=c.createStatement()) {
                 try(var rs=s.executeQuery("select count(*) from rotas_publicas")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
                 try(var rs=s.executeQuery("select count(*) from solicitacoes_embarque")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
@@ -34,6 +35,10 @@ class CapacidadeMigrationPostgresIT {
                     assertTrue(rs.next());rotaId=rs.getLong(1);
                 }
                 String inserir="insert into solicitacoes_embarque(rota_id,aluno_id,data_operacao,sentido,nome_ponto,latitude,longitude,status,criado_em) values("+rotaId+",1,CURRENT_DATE,'IDA','Pin',-8.2,-35.2,'PENDENTE',CURRENT_TIMESTAMP)";
+                String favorito="insert into rotas_favoritas(usuario_id,rota_id,ativo) values(1,"+rotaId+",true)";
+                assertEquals(1,s.executeUpdate(favorito));assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(favorito)).getSQLState());
+                s.executeUpdate("update rotas_favoritas set ativo=false where usuario_id=1");
+                assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(favorito)).getSQLState());
                 assertEquals(1,s.executeUpdate(inserir));
                 SQLException duplicado=assertThrows(SQLException.class,()->s.executeUpdate(inserir));assertEquals("23505",duplicado.getSQLState());
                 assertEquals(1,s.executeUpdate("update solicitacoes_embarque set status='CANCELADO' where rota_id="+rotaId));

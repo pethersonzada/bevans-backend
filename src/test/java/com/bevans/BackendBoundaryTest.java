@@ -19,6 +19,7 @@ class BackendBoundaryTest {
                     .filter(p -> {
                         String nome = p.getFileName().toString();
                         return nome.endsWith(".tsx") || nome.endsWith(".jsx") || nome.endsWith(".ts")
+                                || nome.endsWith(".js") || nome.endsWith(".cjs") || nome.endsWith(".mjs")
                                 || proibidos.contains(nome);
                     }).map(raiz::relativize).toList();
             assertTrue(indevidos.isEmpty(), () -> "Frontend indevido no backend: " + indevidos);

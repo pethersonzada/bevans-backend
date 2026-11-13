@@ -60,4 +60,27 @@ class TurmaCapacidadeTest {
         var vagas=service.consultarVagas(7L);
         assertFalse(vagas.configurada()); assertNull(vagas.disponiveis()); assertEquals(8,vagas.ocupados());
     }
+
+    private AlunoTurma prepararCancelamento(String status) {
+        when(vinculos.turmaIdDoVinculo(3L)).thenReturn(Optional.of(7L));
+        when(turmas.lockById(7L)).thenReturn(Optional.of(new Turma()));
+        Usuario aluno=new Usuario();aluno.setId(2L);
+        AlunoTurma v=new AlunoTurma();v.setAluno(aluno);v.setStatus(status);
+        when(vinculos.findById(3L)).thenReturn(Optional.of(v));return v;
+    }
+    @Test void cancelamentoRepetidoEIdempotente() {
+        var v=prepararCancelamento("PENDENTE");
+        service.cancelarSolicitacao(3L,2L);service.cancelarSolicitacao(3L,2L);
+        assertEquals("CANCELADO",v.getStatus());verify(vinculos,times(1)).save(v);
+    }
+    @Test void aprovadoNaoPodeSerCanceladoComoPendente() {
+        prepararCancelamento("APROVADO");
+        assertThrows(com.bevans.exception.SolicitacaoConflictException.class,()->service.cancelarSolicitacao(3L,2L));
+        verify(vinculos,never()).save(any());
+    }
+    @Test void serviceTambemBloqueiaTitularDiferente() {
+        prepararCancelamento("PENDENTE");
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.cancelarSolicitacao(3L,99L));
+        verify(vinculos,never()).save(any());
+    }
 }

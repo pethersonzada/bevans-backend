@@ -82,4 +82,12 @@ class TurmaCapacidadeConcorrenciaTest {
         assertTrue(vinculos.findByTurmaIdAndAlunoId(ids[0],alunoId).isPresent());
         assertEquals(3,vinculos.countByTurmaIdAndStatus(ids[0],"PENDENTE"));
     }
+    @Test void cancelarEAprovarMesmaSolicitacaoNaoSobrescrevemEstadoFinal() throws Exception {
+        Long[] ids=preparar(1);
+        Long alunoId=vinculos.findById(ids[1]).orElseThrow().getAluno().getId();
+        assertEquals(1,corrida(()->service.cancelarSolicitacao(ids[1],alunoId),()->service.analisarSolicitacao(ids[1],"APROVADO")));
+        String status=vinculos.statusAtual(ids[1]);
+        assertTrue("CANCELADO".equals(status)||"APROVADO".equals(status));
+        assertEquals("APROVADO".equals(status)?1:0,vinculos.countByTurmaIdAndStatus(ids[0],"APROVADO"));
+    }
 }

@@ -60,6 +60,18 @@ public class AccessPolicy {
         return u != null && "MOTORISTA".equals(u.getTipo());
     }
 
+    public boolean isPassageiro() {
+        Usuario u = usuario();
+        return u != null && "PASSAGEIRO".equals(u.getTipo());
+    }
+
+    public boolean ownVinculo(Long id) {
+        Usuario u = usuario();
+        return u != null && "PASSAGEIRO".equals(u.getTipo()) && id != null
+                && vinculos.findById(id).map(v -> v.getAluno() != null
+                && java.util.Objects.equals(v.getAluno().getId(), u.getId())).orElse(false);
+    }
+
     public boolean canStartRota(Map<String, Object> payload) {
         if (payload == null || payload.get("turmaId") == null) return false;
         try {

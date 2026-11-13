@@ -110,7 +110,7 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler({TurmaComRotaAtivaException.class, CapacidadeException.class})
+    @ExceptionHandler({TurmaComRotaAtivaException.class, CapacidadeException.class, SolicitacaoConflictException.class})
     public ResponseEntity<Object> turmaComRotaAtiva(
             RuntimeException ex,
             WebRequest request

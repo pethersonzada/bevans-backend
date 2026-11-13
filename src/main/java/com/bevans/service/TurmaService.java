@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bevans.exception.TurmaComRotaAtivaException;
 import com.bevans.exception.CapacidadeException;
 import com.bevans.dto.VagasTurmaDTO;
+import com.bevans.dto.SolicitacaoVagaDTO;
+import com.bevans.exception.SolicitacaoConflictException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import com.bevans.model.AlunoTurma;
@@ -525,6 +527,34 @@ public class TurmaService {
         if (capacidade == null || capacidade <= 0) {
             throw new IllegalArgumentException("Informe uma quantidade inteira e positiva de assentos.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<SolicitacaoVagaDTO> minhasSolicitacoes(Long alunoId) {
+        return alunoTurmaRepository.findByAlunoId(alunoId).stream()
+                .filter(v -> v.getTurma() != null && !v.getTurma().isExcluido())
+                .map(v -> new SolicitacaoVagaDTO(v.getId(), v.getTurma().getId(), v.getTurma().getNome(), v.getStatus()))
+                .toList();
+    }
+
+    @Transactional
+    public void cancelarSolicitacao(Long vinculoId, Long alunoId) {
+        Long turmaId = alunoTurmaRepository.turmaIdDoVinculo(vinculoId)
+                .orElseThrow(() -> new IllegalArgumentException("Solicitação não encontrada."));
+        turmaRepository.lockById(turmaId)
+                .orElseThrow(() -> new IllegalArgumentException("Turma não encontrada."));
+        AlunoTurma vinculo = alunoTurmaRepository.findById(vinculoId)
+                .orElseThrow(() -> new IllegalArgumentException("Solicitação não encontrada."));
+        entityManager.refresh(vinculo);
+        if (vinculo.getAluno() == null || !java.util.Objects.equals(alunoId, vinculo.getAluno().getId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Solicitação de outro passageiro.");
+        }
+        if ("CANCELADO".equals(vinculo.getStatus())) return;
+        if (!"PENDENTE".equals(vinculo.getStatus())) {
+            throw new SolicitacaoConflictException("Somente solicitações pendentes podem ser canceladas.");
+        }
+        vinculo.setStatus("CANCELADO");
+        alunoTurmaRepository.save(vinculo);
     }
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)

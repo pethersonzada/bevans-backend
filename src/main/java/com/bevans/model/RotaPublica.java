@@ -47,6 +47,7 @@ public class RotaPublica {
     @Version
     private long versao;
     @ElementCollection(fetch=FetchType.EAGER)
+    @org.hibernate.annotations.BatchSize(size=50)
     @CollectionTable(name="rota_publica_dias",joinColumns=@JoinColumn(name="rota_id"))
     @Column(name="dia",nullable=false) @Enumerated(EnumType.STRING)
     private java.util.Set<java.time.DayOfWeek> dias = new java.util.HashSet<>();

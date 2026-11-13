@@ -51,12 +51,21 @@ class RotasPublicasFluxoHttpTest {
                     .andExpect(status().isOk()).andExpect(jsonPath("$.publicada").value(false)).andReturn();
             long id=json.readTree(rota.getResponse().getContentAsString()).get("id").asLong();
             mvc.perform(get("/rotas-publicas/"+id).header("Authorization","Bearer passenger-http")).andExpect(status().isForbidden());
+            mvc.perform(get("/rotas-publicas/catalogo").header("Authorization","Bearer passenger-http"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
             mvc.perform(put("/rotas-publicas/"+id+"/publicacao").header("Authorization","Bearer driver-http").contentType("application/json").content("{\"valor\":true}"))
                     .andExpect(status().isOk());
             var publico=mvc.perform(get("/rotas-publicas/"+id).header("Authorization","Bearer passenger-http"))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.motorista").doesNotExist()).andExpect(jsonPath("$.alunos").doesNotExist())
                     .andExpect(jsonPath("$.telefone").doesNotExist()).andReturn();
             assertFalse(publico.getResponse().getContentAsString().contains("private-phone"));
+            mvc.perform(get("/rotas-publicas/catalogo").header("Authorization","Bearer passenger-http").param("q","CAMPUS").param("cidade","CARUARU"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                    .andExpect(jsonPath("$.itens[0].telefone").doesNotExist()).andExpect(jsonPath("$.itens[0].latitude").doesNotExist())
+                    .andExpect(jsonPath("$.itens[0].passageiros").doesNotExist()).andExpect(jsonPath("$.itens[0].gps").doesNotExist());
+            mvc.perform(get("/rotas-publicas/catalogo")).andExpect(status().isUnauthorized());
+            mvc.perform(get("/rotas-publicas/catalogo").header("Authorization","Bearer passenger-http").param("tamanho","51"))
+                    .andExpect(status().isBadRequest());
             var pedido=mvc.perform(post("/rotas-publicas/"+id+"/solicitacoes").header("Authorization","Bearer passenger-http"))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PENDENTE")).andReturn();
             long vinculo=json.readTree(pedido.getResponse().getContentAsString()).get("id").asLong();

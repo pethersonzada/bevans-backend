@@ -15,6 +15,10 @@ public interface AlunoTurmaRepository
 
     long countByTurmaIdAndStatus(Long turmaId, String status);
 
+    interface OcupacaoTurma { Long getTurmaId(); long getOcupados(); }
+    @Query("select v.turma.id as turmaId, count(v.id) as ocupados from AlunoTurma v where v.turma.id in :ids and v.status='APROVADO' group by v.turma.id")
+    List<OcupacaoTurma> ocupacaoDasTurmas(@Param("ids") List<Long> ids);
+
     @Query("select v.turma.id from AlunoTurma v where v.id = :id")
     Optional<Long> turmaIdDoVinculo(@Param("id") Long id);
 

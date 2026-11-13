@@ -1,5 +1,29 @@
 # Estado de retomada — 13/11/2026
 
+## Correção organizacional — escopo exclusivo de backend
+
+Escrita restrita a C:\dev\bevans-backend. Não alterar C:\dev\bevans-frontend,
+não implementar React Native/Expo/TypeScript aqui e não recriar staging de
+frontend em target nem em outra pasta deste repositório. Histórico abaixo é
+apenas registro anterior, não autorização para continuar trabalho de frontend.
+
+Foram auditados e removidos 23 caminhos exclusivamente de frontend: diretórios
+target/address-stage e target/next-frontend, 18 scripts .cjs de preparação/cópia,
+os temporários address-document.md/editor-validation.md e o log frontend-editor.
+Arquivos de staging correspondem ao frontend atual ou à versão commitada
+bf2631f; não havia alterações únicas úteis de backend. Manifestos são snapshots
+de preparação, não dependências. Nada foi copiado/movido para o frontend.
+Nenhum desses artefatos estava versionado. Branch e commits preservados.
+
+Antes de Maven clean, logs de backend (incluindo roteirizacao-testes.log
+preexistente) foram preservados em .validation-logs/before-clean, ignorado pelo
+Git. Código Java, testes, migrações e documentação válida não foram removidos.
+Após a remoção, Maven clean verify passou e recompilou o backend do zero.
+Log desta validação: .validation-logs/cleanup-clean-verify.log.
+
+Próxima implementação somente backend: #40 embarques, depois #34 catálogo,
+#42 favoritos, #41 rastreamento, #28–#32 excursões. Consultar critérios no GitHub.
+
 ## Estado atual após revalidação e editor urbano
 
 Branches mantidas: fix/address-draft-stabilization, backend e frontend.

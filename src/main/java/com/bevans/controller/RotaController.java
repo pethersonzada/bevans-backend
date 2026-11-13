@@ -1,6 +1,10 @@
 
 package com.bevans.controller;
 
+import com.bevans.exception.RecursoNaoEncontradoException;
+
+import org.springframework.security.access.AccessDeniedException;
+
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.time.LocalDate;
@@ -150,8 +154,7 @@ public class RotaController {
             @RequestParam(required = false) Long enderecoVolta
     ) {
         if (status == null || status.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body("Informe o status.");
+            throw new IllegalArgumentException("Informe o status.");
         }
 
         String novoStatus = status.trim().toUpperCase();
@@ -163,13 +166,11 @@ public class RotaController {
                 "NAO_VOU",
                 "LIMPAR"
         ).contains(novoStatus)) {
-            return ResponseEntity.badRequest()
-                    .body("Status inválido.");
+            throw new IllegalArgumentException("Status inválido.");
         }
 
         if (!passageiroAprovado(usuarioId, turmaId)) {
-            return ResponseEntity.status(403)
-                    .body("Passageiro não aprovado nesta turma.");
+            throw new AccessDeniedException("Passageiro não aprovado nesta turma.");
         }
 
         Presenca presenca = presencaRepository
@@ -197,13 +198,11 @@ public class RotaController {
                 || "AMBOS".equals(novoStatus);
 
         if (temIda && enderecoIda == null) {
-            return ResponseEntity.badRequest()
-                    .body("Selecione o endereço da ida.");
+            throw new IllegalArgumentException("Selecione o endereço da ida.");
         }
 
         if (temVolta && enderecoVolta == null) {
-            return ResponseEntity.badRequest()
-                    .body("Selecione o endereço da volta.");
+            throw new IllegalArgumentException("Selecione o endereço da volta.");
         }
 
         Endereco ida = null;
@@ -224,8 +223,7 @@ public class RotaController {
                 );
             }
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                    .body(e.getMessage());
+            throw new IllegalArgumentException(e.getMessage());
         }
 
         if (presenca == null) {
@@ -238,8 +236,7 @@ public class RotaController {
                     .orElse(null);
 
             if (usuario == null || turma == null) {
-                return ResponseEntity.badRequest()
-                        .body("Usuário ou turma inexistente.");
+                throw new RecursoNaoEncontradoException("Usuário ou turma inexistente.");
             }
 
             presenca = new Presenca();
@@ -289,7 +286,7 @@ public class RotaController {
             @RequestParam Long turmaId
     ) {
         if (!passageiroAprovado(usuarioId, turmaId)) {
-            return ResponseEntity.status(403).build();
+            throw new AccessDeniedException("Passageiro não aprovado nesta turma.");
         }
 
         Presenca presenca = presencaRepository
@@ -351,7 +348,7 @@ public class RotaController {
         Object sentidoObj = payload.get("sentido");
 
         if (turmaIdObj == null || sentidoObj == null) {
-            return ResponseEntity.badRequest().body(
+            throw new IllegalArgumentException(
                     "turmaId e sentido são obrigatórios."
             );
         }
@@ -408,8 +405,8 @@ public class RotaController {
         // Impede que parâmetros ausentes cheguem ao serviço.
         if (sentido == null || sentido.isBlank()
                 || turmaId == null) {
-            return CompletableFuture.completedFuture(
-                    ResponseEntity.badRequest().build()
+            throw new IllegalArgumentException(
+                    "Parâmetros de otimização inválidos."
             );
         }
 
@@ -418,15 +415,15 @@ public class RotaController {
 
         if (!sentidoNormalizado.equals("IDA")
                 && !sentidoNormalizado.equals("VOLTA")) {
-            return CompletableFuture.completedFuture(
-                    ResponseEntity.badRequest().build()
+            throw new IllegalArgumentException(
+                    "Parâmetros de otimização inválidos."
             );
         }
 
         // Turma inexistente é 404, não 400.
         if (!turmaRepository.existsById(turmaId)) {
-            return CompletableFuture.completedFuture(
-                    ResponseEntity.notFound().build()
+            throw new RecursoNaoEncontradoException(
+                    "Turma não encontrada."
             );
         }
 
@@ -445,7 +442,11 @@ public class RotaController {
             @RequestParam Double latitude,
             @RequestParam Double longitude
     ) {
-        return ResponseEntity.status(410).body("Use PUT /viagens/{viagemId}/localizacao com timestamp e identificador de amostra.");
+        if(!viagemService.rotaAtiva(turmaId))throw new IllegalArgumentException("Rota inativa para esta turma.");
+        if(latitude==null||longitude==null||!Double.isFinite(latitude)||!Double.isFinite(longitude)
+                ||Math.abs(latitude)>90||Math.abs(longitude)>180)
+            throw new IllegalArgumentException("Coordenadas da van inválidas.");
+        throw new com.bevans.exception.EndpointLegadoException("Use PUT /viagens/{viagemId}/localizacao com timestamp e identificador de amostra.");
     }
 
     @Operation(summary = "Buscar Localização da Van")
@@ -454,6 +455,7 @@ public class RotaController {
     public ResponseEntity<Object> obterLocalizacaoVan(
             @RequestParam Long turmaId
     ) {
-        return ResponseEntity.status(410).body("Use GET /viagens/{viagemId}/localizacao; obtenha viagemId em /rota/status-atual.");
+        if(!viagemService.rotaAtiva(turmaId))throw new RecursoNaoEncontradoException("Localização da van não encontrada.");
+        throw new com.bevans.exception.EndpointLegadoException("Use GET /viagens/{viagemId}/localizacao; obtenha viagemId em /rota/status-atual.");
     }
 }

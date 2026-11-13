@@ -1,6 +1,10 @@
 
 package com.bevans.service;
 
+import com.bevans.exception.ConflitoException;
+
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -126,7 +130,7 @@ public class TurmaService {
         Usuario motorista = usuarioRepository
                 .findById(turma.getMotorista().getId())
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Motorista não encontrado."
                         )
                 );
@@ -163,6 +167,22 @@ public class TurmaService {
                             .substring(0, 6)
                             .toUpperCase()
             );
+        }
+
+        // Permite criar um rascunho antes da seleção no mapa.
+        // Uma origem ou destino informado continua exigindo validação.
+        boolean semOrigem = turma.getOrigemLatitude() == null
+                && turma.getOrigemLongitude() == null
+                && (turma.getOrigemNome() == null
+                    || turma.getOrigemNome().isBlank());
+
+        boolean semDestino = turma.getDestinoLatitude() == null
+                && turma.getDestinoLongitude() == null
+                && (turma.getDestinoNome() == null
+                    || turma.getDestinoNome().isBlank());
+
+        if (semOrigem && semDestino) {
+            return turmaRepository.save(turma);
         }
 
         // Validar destino antes de persistir.
@@ -228,7 +248,7 @@ public class TurmaService {
                         alunoId
                 )
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Vínculo não encontrado."
                         )
                 );
@@ -276,7 +296,7 @@ public class TurmaService {
         Turma turma = turmaRepository
                 .lockById(turmaId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );
@@ -408,7 +428,7 @@ public class TurmaService {
         Usuario aluno = usuarioRepository
                 .findById(alunoId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Aluno não encontrado."
                         )
                 );
@@ -432,13 +452,13 @@ public class TurmaService {
         if (vinculo != null) {
 
             if ("APROVADO".equals(vinculo.getStatus())) {
-                throw new IllegalArgumentException(
+                throw new ConflitoException(
                         "Você já participa desta turma."
                 );
             }
 
             if ("PENDENTE".equals(vinculo.getStatus())) {
-                throw new IllegalArgumentException(
+                throw new ConflitoException(
                         "Sua solicitação já está pendente."
                 );
             }
@@ -486,14 +506,14 @@ public class TurmaService {
         }
 
         Long turmaId = alunoTurmaRepository.turmaIdDoVinculo(vinculoId)
-                .orElseThrow(() -> new IllegalArgumentException("Solicitação não encontrada."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Solicitação não encontrada."));
         turmaRepository.lockById(turmaId)
-                .orElseThrow(() -> new IllegalArgumentException("Turma não encontrada."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada."));
 
         // Consultas escalares depois do lock não reutilizam entidades antigas
         // do contexto da autorização/OpenEntityManagerInView.
         if (!"PENDENTE".equals(alunoTurmaRepository.statusAtual(vinculoId))) {
-            throw new IllegalArgumentException("Somente solicitações pendentes podem ser analisadas.");
+            throw new ConflitoException("Somente solicitações pendentes podem ser analisadas.");
         }
         if ("APROVADO".equals(novoStatus)) {
             Integer capacidade = turmaRepository.capacidadeAtual(turmaId);
@@ -508,13 +528,13 @@ public class TurmaService {
         AlunoTurma vinculo = alunoTurmaRepository
                 .findById(vinculoId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Solicitação não encontrada."
                         )
                 );
 
         if (!"PENDENTE".equals(vinculo.getStatus())) {
-            throw new IllegalArgumentException(
+            throw new ConflitoException(
                     "Somente solicitações pendentes podem ser analisadas."
             );
         }
@@ -574,7 +594,7 @@ public class TurmaService {
         Turma turma = turmaRepository
                 .lockById(turmaId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );
@@ -595,7 +615,7 @@ public class TurmaService {
         Turma turma = turmaRepository
                 .findById(turmaId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );

@@ -1,6 +1,8 @@
 
 package com.bevans.service;
 
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -168,7 +170,7 @@ public class RotaService {
 
         Turma turma = turmaRepository.findById(turmaId)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new RecursoNaoEncontradoException(
                                 "Turma não encontrada."
                         )
                 );
@@ -176,7 +178,7 @@ public class RotaService {
         Usuario motorista = turma.getMotorista();
 
         if (motorista == null) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "Esta turma não possui motorista associado."
             );
         }
@@ -210,7 +212,7 @@ public class RotaService {
         }
 
         if (!coordenadasValidas(origemLat, origemLon)) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "A turma não possui coordenadas de origem "
                     + "válidas e o motorista não possui "
                     + "localização disponível."
@@ -284,14 +286,6 @@ public class RotaService {
             lonsList.add(lonFinal);
         }
 
-        // 6. Nenhum passageiro confirmado para este sentido.
-
-        if (passageirosDTO.isEmpty()) {
-            return CompletableFuture.completedFuture(
-                    new ArrayList<>()
-            );
-        }
-
         // 7. Validar destino da turma.
 
         Double destinoLat = turma.getDestinoLatitude();
@@ -301,9 +295,17 @@ public class RotaService {
                 destinoLat,
                 destinoLon
         )) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     "A turma não possui coordenadas de "
                     + "destino válidas."
+            );
+        }
+
+        // 6. Nenhum passageiro confirmado para este sentido.
+
+        if (passageirosDTO.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                    new ArrayList<>()
             );
         }
 

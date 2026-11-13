@@ -1,0 +1,50 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bevans_validation
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local-test-only
+        ports:
+          - 55435:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bevans_validation"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Executar testes
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Preparar schemas PostgreSQL isolados
+        env:
+          PGPASSWORD: local-test-only
+        run: |
+          for schema in capacity_service publication_service boarding_service catalog_service favorite_service gps_service excursion_service; do
+            psql -h 127.0.0.1 -p 55435 -U postgres -d bevans_validation -v ON_ERROR_STOP=1 -c "CREATE SCHEMA $schema"
+          done
+
+      - name: Validar PostgreSQL e migrações
+        run: mvn --batch-mode --no-transfer-progress -Ppostgres-validation verify

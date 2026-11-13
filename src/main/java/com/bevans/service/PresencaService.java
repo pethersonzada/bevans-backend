@@ -1,5 +1,7 @@
 package com.bevans.service;
 
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 import java.time.LocalDate;
 import java.time.ZoneId;
 import org.springframework.stereotype.Service;
@@ -24,7 +26,7 @@ public class PresencaService {
     public void registrarPresenca(Presenca presenca, Long enderecoId) {
         if (enderecoId != null) {
             Endereco endereco = enderecoRepository.findById(enderecoId)
-                    .orElseThrow(() -> new RuntimeException("Endereço não encontrado"));
+                    .orElseThrow(() -> new RecursoNaoEncontradoException("Endereço não encontrado"));
             presenca.setEndereco(endereco);
         }
         

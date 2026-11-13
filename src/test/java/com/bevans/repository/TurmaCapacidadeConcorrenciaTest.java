@@ -49,7 +49,7 @@ class TurmaCapacidadeConcorrenciaTest {
         java.util.function.Function<Runnable,Callable<Boolean>> tarefa=acao->()->{
             prontos.countDown();
             if(!inicio.await(5,TimeUnit.SECONDS)) throw new AssertionError("Barrier timeout");
-            try { acao.run(); return true; } catch(CapacidadeException | IllegalArgumentException conflito) { return false; }
+            try { acao.run(); return true; } catch(CapacidadeException | IllegalArgumentException | com.bevans.exception.ConflitoException conflito) { return false; }
         };
         try {
             Future<Boolean> a=pool.submit(tarefa.apply(primeira)), b=pool.submit(tarefa.apply(segunda));

@@ -95,4 +95,69 @@ class RotaPermissoesExtrasHttpTest extends BaseAutorizacaoHttpTest {
                 .andExpect(status().isForbidden());
         }
     }
+
+    @Test
+    void localizacaoLegadaOrientaNovoContratoComViagemAtivaPersistida() throws Exception {
+        var motorista = usuario(1, "MOTORISTA");
+        identidade("motor-localizacao", motorista);
+        turma(913, motorista);
+
+        when(viagemService.rotaAtiva(913L)).thenReturn(true);
+
+        try (var ignored = firebase("token-localizacao", "motor-localizacao")) {
+            mvc.perform(post("/rota/localizacao-van")
+                    .param("turmaId", "913")
+                    .param("latitude", "-8.23")
+                    .param("longitude", "-35.75")
+                    .header("Authorization", "Bearer token-localizacao"))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.erro").value(org.hamcrest.Matchers.containsString("PUT /viagens/")));
+
+            mvc.perform(get("/rota/localizacao-van")
+                    .param("turmaId", "913")
+                    .header("Authorization", "Bearer token-localizacao"))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.erro").value(org.hamcrest.Matchers.containsString("GET /viagens/")))
+                .andExpect(jsonPath("$.latitude").doesNotExist());
+        }
+
+        verify(viagemService, times(2)).rotaAtiva(913L);
+    }
+
+    @Test
+    void localizacaoRejeitaCoordenadasInvalidas() throws Exception {
+        var motorista = usuario(1, "MOTORISTA");
+        identidade("motor-coordenadas", motorista);
+        turma(914, motorista);
+
+        when(viagemService.rotaAtiva(914L)).thenReturn(true);
+
+        try (var ignored = firebase("token-coordenadas", "motor-coordenadas")) {
+            mvc.perform(post("/rota/localizacao-van")
+                    .param("turmaId", "914")
+                    .param("latitude", "100")
+                    .param("longitude", "-35.75")
+                    .header("Authorization", "Bearer token-coordenadas"))
+                .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    void localizacaoBloqueadaSemViagemAtiva() throws Exception {
+        var motorista = usuario(1, "MOTORISTA");
+        identidade("motor-inativo", motorista);
+        turma(915, motorista);
+
+        when(viagemService.rotaAtiva(915L)).thenReturn(false);
+
+        try (var ignored = firebase("token-inativo", "motor-inativo")) {
+            mvc.perform(post("/rota/localizacao-van")
+                    .param("turmaId", "915")
+                    .param("latitude", "-8.23")
+                    .param("longitude", "-35.75")
+                    .header("Authorization", "Bearer token-inativo"))
+                .andExpect(status().isBadRequest());
+        }
+    }
+
 }

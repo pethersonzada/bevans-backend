@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +20,7 @@ public class HealthController {
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Servidor ativo e operacional"),
     })
+    @SecurityRequirements
     @GetMapping
     public ResponseEntity<String> check() {
         return ResponseEntity.ok("OK");

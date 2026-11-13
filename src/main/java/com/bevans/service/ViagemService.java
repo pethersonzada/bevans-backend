@@ -1,5 +1,9 @@
 package com.bevans.service;
 
+import com.bevans.exception.ConflitoException;
+
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -26,12 +30,12 @@ public class ViagemService {
     @Transactional
     public void iniciarRota(Long turmaId, String sentido) {
         Turma turma = turmaRepository.lockById(turmaId)
-                .orElseThrow(() -> new RuntimeException("Turma não encontrada no sistema."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada no sistema."));
 
         Optional<Viagem> viagemAtiva = viagemRepository.findFirstByTurmaIdAndStatus(turmaId, "EM_ANDAMENTO");
         
         if (viagemAtiva.isPresent()) {
-            throw new RuntimeException("Já existe uma rota em andamento exclusivamente para esta turma.");
+            throw new ConflitoException("Já existe uma rota em andamento exclusivamente para esta turma.");
         }
 
         Viagem novaViagem = new Viagem();
@@ -44,7 +48,7 @@ public class ViagemService {
 
     @Transactional
     public void encerrarRota(Long turmaId) {
-        turmaRepository.lockById(turmaId).orElseThrow(()->new IllegalArgumentException("Turma não encontrada."));
+        turmaRepository.lockById(turmaId).orElseThrow(()->new RecursoNaoEncontradoException("Turma não encontrada."));
         Optional<Viagem> viagemAtiva = viagemRepository.findFirstByTurmaIdAndStatus(turmaId, "EM_ANDAMENTO");
         
         if (viagemAtiva.isPresent()) {
@@ -53,6 +57,12 @@ public class ViagemService {
             posicoes.findById(viagem.getId()).ifPresent(p->{p.limpar();posicoes.save(p);});
             viagemRepository.save(viagem);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public boolean rotaAtiva(Long turmaId) {
+        return viagemRepository.existsByTurmaIdAndStatus(
+                turmaId, "EM_ANDAMENTO");
     }
 
     @Transactional(readOnly = true)

@@ -27,13 +27,11 @@ public class PresencaController {
     public ResponseEntity<String> marcarPresenca(
             @RequestBody Map<String, Object> payload
     ) {
-        return ResponseEntity
-                .status(HttpStatus.GONE)
-                .body(
-                    "Este endpoint foi substituído. "
-                    + "Utilize POST /rota/confirmar "
-                    + "informando usuarioId, turmaId, "
-                    + "status, enderecoIda e enderecoVolta."
-                );
+        throw new com.bevans.exception.EndpointLegadoException(
+                "Este endpoint foi substituído. "
+                + "Utilize POST /rota/confirmar "
+                + "informando usuarioId, turmaId, "
+                + "status, enderecoIda e enderecoVolta."
+        );
     }
 }

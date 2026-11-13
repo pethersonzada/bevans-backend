@@ -4,6 +4,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import org.springframework.stereotype.Service;
+import com.bevans.exception.RecursoNaoEncontradoException;
 import com.bevans.model.Endereco;
 import com.bevans.model.Usuario;
 import com.bevans.repository.EnderecoRepository;
@@ -26,7 +27,7 @@ public class EnderecoService {
         // O identificador e o proprietário vêm exclusivamente do servidor.
         enderecoRequest.setId(null);
         Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado"));
 
         enderecoRequest.setUsuario(usuario);
         Endereco salvo = enderecoRepository.save(enderecoRequest);
@@ -57,7 +58,7 @@ public class EnderecoService {
     @Transactional
     public Endereco atualizarEndereco(Long id, Endereco enderecoRequest) {
         Endereco endereco = enderecoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Endereço não encontrado"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Endereço não encontrado"));
 
         if (enderecoRequest.getApelido() != null) {
             endereco.setApelido(enderecoRequest.getApelido());
@@ -87,7 +88,7 @@ public class EnderecoService {
 
     public void excluirEndereco(Long id) {
         if (!enderecoRepository.existsById(id)) {
-            throw new RuntimeException("Endereço não encontrado");
+            throw new RecursoNaoEncontradoException("Endereço não encontrado");
         }
         enderecoRepository.deleteById(id);
     }

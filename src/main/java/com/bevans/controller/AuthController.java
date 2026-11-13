@@ -1,5 +1,9 @@
 package com.bevans.controller;
 
+import com.bevans.exception.RecursoNaoEncontradoException;
+
+import org.springframework.security.access.AccessDeniedException;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -33,14 +37,14 @@ public class AuthController {
         String emailInformado = payload == null ? null : payload.get("email");
         if (uid == null || emailToken == null || emailInformado == null
                 || !emailToken.equalsIgnoreCase(emailInformado.trim())) {
-            return ResponseEntity.status(403).body(Map.of("erro", "Identidade não corresponde ao token Firebase."));
+            throw new AccessDeniedException("Identidade não corresponde ao token Firebase.");
         }
 
         Usuario usuario = usuarios.findByEmail(emailToken)
-                .orElseThrow(() -> new IllegalArgumentException("Perfil não encontrado."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil não encontrado."));
         if (usuario.getFirebaseUid() != null
                 && !Objects.equals(usuario.getFirebaseUid(), uid)) {
-            return ResponseEntity.status(403).body(Map.of("erro", "Perfil pertence a outra identidade."));
+            throw new AccessDeniedException("Perfil pertence a outra identidade.");
         }
         if (usuario.getFirebaseUid() == null) {
             usuario.setFirebaseUid(uid);

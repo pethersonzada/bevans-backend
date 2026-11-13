@@ -32,7 +32,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
         if (header != null) {
             if (!header.startsWith("Bearer ") || header.substring(7).isBlank()) {
-                unauthorized(response);
+                unauthorized(request, response);
                 return;
             }
 
@@ -54,7 +54,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();
-                unauthorized(response);
+                unauthorized(request, response);
                 return;
             }
         }
@@ -66,11 +66,13 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
         }
     }
 
-    private void unauthorized(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write(
-                "{\"erro\":\"Token Firebase ausente, inválido ou expirado.\"}"
+    private void unauthorized(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) throws IOException {
+        HttpErrorWriter.write(
+                request, response, 401,
+                "Token Firebase ausente, inválido ou expirado."
         );
     }
 }

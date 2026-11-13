@@ -110,7 +110,7 @@ class TurmaServiceSegurancaTest {
         vinculo.setStatus("REJEITADO");
         prepararAnalise("REJEITADO", false);
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(com.bevans.exception.ConflitoException.class,
                 () -> service.analisarSolicitacao(11L, "APROVADO"));
         assertEquals("REJEITADO", vinculo.getStatus());
         verify(vinculos, never()).save(any(AlunoTurma.class));

@@ -122,6 +122,32 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(RecursoNaoEncontradoException.class)
+    public ResponseEntity<Object> recursoNaoEncontrado(
+            RecursoNaoEncontradoException ex,
+            WebRequest request
+    ) {
+        return resposta(
+                HttpStatus.NOT_FOUND,
+                ex.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(ConflitoException.class)
+    public ResponseEntity<Object> conflito(
+            ConflitoException ex, WebRequest request) {
+        return resposta(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(EndpointLegadoException.class)
+    public ResponseEntity<Object> endpointLegado(
+            EndpointLegadoException ex,
+            WebRequest request
+    ) {
+        return resposta(HttpStatus.GONE, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> erroInterno(
             Exception ex,

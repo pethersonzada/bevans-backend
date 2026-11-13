@@ -207,4 +207,40 @@ class RotaServiceTest {
         preparar(turma, p);
         assertEquals(incluido ? List.of(2L) : List.of(), ids(sentido, 1));
     }
+
+    @Test
+    void destinoInvalidoSemPassageirosTambemFalha() {
+        turma.setDestinoLatitude(0.0);
+        turma.setDestinoLongitude(0.0);
+
+        preparar(turma);
+
+        IllegalArgumentException erro = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.otimizarRota("IDA", 1L)
+        );
+
+        assertTrue(erro.getMessage().contains("destino"));
+    }
+
+    @Test
+    void tresPassageirosMantemSequenciaSemOmissoesOuDuplicacoes() {
+        preparar(
+                turma,
+                presenca(2, -8.08),
+                presenca(3, -8.02),
+                presenca(4, -8.05)
+        );
+
+        assertEquals(
+                List.of(3L, 4L, 2L),
+                ids("IDA", 1L)
+        );
+
+        assertEquals(
+                List.of(2L, 4L, 3L),
+                ids("VOLTA", 1L)
+        );
+    }
+
 }

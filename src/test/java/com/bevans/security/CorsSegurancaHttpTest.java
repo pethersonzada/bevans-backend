@@ -25,6 +25,12 @@ class CorsSegurancaHttpTest extends BaseAutorizacaoHttpTest {
                 .header("Origin", "https://hostil.exemplo.test")
                 .header("Access-Control-Request-Method", "GET"))
             .andExpect(status().isForbidden())
+            .andExpect(content().contentTypeCompatibleWith("application/json"))
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.erro").isString())
+            .andExpect(jsonPath("$.timestamp").exists())
+            .andExpect(jsonPath("$.caminho")
+                    .value("/turmas/13/passageiros"))
             .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }
     @Test void origemLocalNaoEhPermitidaQuandoAmbienteRestrito() throws Exception {
@@ -32,6 +38,12 @@ class CorsSegurancaHttpTest extends BaseAutorizacaoHttpTest {
                 .header("Origin", "http://localhost:5173")
                 .header("Access-Control-Request-Method", "GET"))
             .andExpect(status().isForbidden())
+            .andExpect(content().contentTypeCompatibleWith("application/json"))
+            .andExpect(jsonPath("$.status").value(403))
+            .andExpect(jsonPath("$.erro").isString())
+            .andExpect(jsonPath("$.timestamp").exists())
+            .andExpect(jsonPath("$.caminho")
+                    .value("/turmas/13/passageiros"))
             .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }
 }

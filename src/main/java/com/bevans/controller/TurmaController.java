@@ -1,6 +1,8 @@
 
 package com.bevans.controller;
 
+import com.bevans.exception.RecursoNaoEncontradoException;
+
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.time.LocalDate;
@@ -140,11 +142,8 @@ public class TurmaController {
                 );
 
         if (turma == null) {
-            return ResponseEntity.status(404).body(
-                    Map.of(
-                        "erro",
-                        "Aluno não vinculado a nenhuma turma."
-                    )
+            throw new RecursoNaoEncontradoException(
+                    "Aluno não vinculado a nenhuma turma."
             );
         }
 

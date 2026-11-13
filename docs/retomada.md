@@ -1,6 +1,23 @@
 # Estado de retomada — 13/11/2026
 
-## Estado vigente — backend apenas, após os novos lotes
+## PR #45 — integração local posterior
+
+Main integrada por merge normal após fetch, de `9ef969d` até origin/main `1a24bb3`.
+Conflitos de RotaController, ViagemService e teste de contexto resolvidos
+combinando contratos/segurança/concorrência da main com os módulos da branch.
+Workflow backend-tests preservado e ampliado para clean verify + PostgreSQL;
+gatilhos push/main, pull_request e workflow_dispatch. Execução CI remota depende
+do push manual; nenhum push, deploy ou merge do PR foi realizado.
+
+Verificações desta integração: **209 testes em clean verify**, **52 execuções
+PostgreSQL**, zero falhas/erros/ignorados. Novo teste de upgrade reproduz schema
+dos seis modelos da main com dados, aplica índice de viagem ativa + 001–008 e
+valida mapeamentos Hibernate sem update automático. Nenhum teste removido.
+Revisão detalhada, limitações de ddl-auto=update e logs: `pr45-merge-review.md`.
+Branch pronta localmente para push manual; aguardar Actions antes do merge remoto.
+Próxima funcionalidade continua #30; não reiniciar auditoria ou implementar frontend.
+
+## Histórico — backend apenas, após os novos lotes
 
 Branch preservada: `fix/address-draft-stabilization`. Base desta sessão: `41c68ed`.
 Nenhuma escrita no frontend, push, deploy ou acesso a produção nesta sessão.

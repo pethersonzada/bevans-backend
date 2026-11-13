@@ -1,6 +1,24 @@
 # Auditoria e execução — 13/11/2026
 
-## Retomada posterior — estado atual
+## Atualização vigente — escopo exclusivo de backend
+
+Frontend indevido em target removido após comparação e preservação dos logs.
+Nenhum artefato foi transferido ao frontend; nenhuma escrita naquele repositório.
+Teste BackendBoundaryTest previne novos projetos/componentes/scripts frontend.
+Implementados backend #40 (embarques e exceções FIXAS opt-in), #34 (catálogo),
+#42 (favoritos), núcleo #41 (GPS privado/SSE/TTL) e estrutura #29 (Excursões).
+Contratos em embarques-api.md, catalogo-api.md, favoritos-api.md,
+rastreamento-api.md e excursoes-api.md. Migrações incrementais 003–008 adicionadas.
+
+Último Maven clean verify: **176 testes aprovados**; PostgreSQL isolado:
+**51 execuções aprovadas**, incluindo migrações 001–008 e concorrência.
+Teste de favoritos corrigido para schema reutilizado: mais 7 testes H2 aprovados.
+Nenhum teste anterior removido ou produção alterada. Commits, logs e limitações
+exatos em retomada.md. Próxima tarefa backend #30, depois #31/#32.
+Tracking mobile, consentimento para menores e teste integrado web/mobile continuam
+pendentes; não declarar as issues completas por compilar ou por API isolada passar.
+
+## Histórico de retomada anterior
 
 Sem reiniciar a auditoria: os lotes foram revalidados e ampliados. PostgreSQL 16
 local descartável executou migrações 001/002 e testes de capacidade/concorrência.

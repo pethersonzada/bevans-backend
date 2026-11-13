@@ -1,5 +1,104 @@
 # Estado de retomada — 13/11/2026
 
+## Estado vigente — backend apenas, após os novos lotes
+
+Branch preservada: `fix/address-draft-stabilization`. Base desta sessão: `41c68ed`.
+Nenhuma escrita no frontend, push, deploy ou acesso a produção nesta sessão.
+Histórico antigo abaixo não autoriza implementar frontend dentro deste backend.
+
+Commits locais desta sessão:
+- `bb14b3b`: remoção segura dos artefatos frontend e teste de limite do repositório.
+- `1f13494`: #40 embarques privados, aprovação, capacidade compartilhada e concorrência.
+- `85a03ab`: #34 catálogo paginado com filtros combináveis e índices incrementais.
+- `04fb12e`: #42 favoritos persistentes, isolados e idempotentes.
+- `07bbedb`: teste também rejeita scripts JS/CJS/MJS indevidos no backend.
+- `f7ee5e0`: #40 opt-in explícito do motorista para exceções em FIXA.
+- `29837f7`: #41 GPS privado vinculado à viagem, TTL, rate limit e SSE limitado.
+- `ab15abb`: teste de favoritos independente da primeira página em schema reutilizado.
+- `5873819`: #29 estrutura/API própria de Excursões com autorização e versão.
+
+### Validação executada nesta sessão
+
+Baseline anterior: 125 testes padrão + 14 execuções PostgreSQL. Nenhum teste
+anterior removido (`git diff 41c68ed --diff-filter=D --name-only -- src/test` vazio).
+Último `mvn clean verify`: **176 testes aprovados**, zero falhas/erros/ignorados;
+recompilação e empacotamento Spring Boot concluídos. Após a correção isolada do
+teste de favoritos, os **7 testes H2** desse conjunto passaram novamente.
+Perfil `postgres-validation`: **51 execuções aprovadas**, zero falhas/erros/ignorados.
+Repetem cenários H2; não somar como casos únicos. Migrações incrementais **001–008**
+executadas em schema PostgreSQL novo, preservando IDs/FK legados e verificando
+unicidade de pedidos/favoritos e constraints novas de posição/Excursões.
+
+Falhas intermediárias investigadas e corrigidas:
+- Coluna do opt-in FIXA ausente em dois schemas locais antigos: Hibernate update
+  não substitui a migração incremental. Aplicada 006 somente nesses schemas e
+  reexecução de 40 testes PostgreSQL passou. Não houve alteração em produção.
+- Teste de favoritos pressupunha rota nova na primeira página depois de várias
+  execuções: agora usa nome único e filtro próprio, sem apagar registros.
+- Erros de compilação pontuais dos novos testes/imports e um restub Mockito SSE
+  foram corrigidos antes das suítes finais.
+
+Logs ignorados em `.validation-logs/`: `cleanup-clean-verify.log`,
+`backend-excecoes-clean-verify.log`, `excecoes-postgres-migrado.log`,
+`gps-clean-verify.log`, `gps-postgres.log`, `excursoes-clean-verify.log`,
+`excursoes-postgres-final.log`, `favoritos-repeatability.log`.
+`git diff --check` passou. `git ls-files target` vazio. Teste BackendBoundaryTest
+passou no build completo; nenhuma árvore Expo/React/TypeScript/JS de preparação.
+
+### Contratos, issues e pendências reais
+
+Backend #40: FIXA escolhe parada ou pin excepcional explicitamente permitido pelo
+dono; FLEXIVEL exige pin confirmado. Pedidos não entram automaticamente na rota.
+Capacidade usa o mesmo lock de turma das aprovações #35. Só dono vê planejamento
+privado com pins aprovados. Cancelamento de aprovado/replanejamento continua 409.
+Contrato: `embarques-api.md`; migrações 003 e 006.
+
+Backend #34/#42: catálogo só publica rotas ativas explícitas; filtros/paginação,
+vagas agregadas e favoritos por identidade Firebase, sem passageiros/endereço
+privado/GPS. Contratos: `catalogo-api.md`, `favoritos-api.md`; migrações 004/005.
+
+Backend #41: último GPS em PostgreSQL, TTL 30s, envio mínimo 5s, identidade da
+viagem, idempotência, SSE 10s com expiração/revalidação e fallback polling.
+Finalizar limpa GPS e bloqueia novo envio usando o mesmo lock de turma.
+`/rota/status-atual` inclui viagemId; `/rota/localizacao-van` legado retorna 410
+após autorização e orienta migração. Contrato: `rastreamento-api.md`; migração 007.
+Pendente: cliente mobile, dispositivo/rede real/background, consentimento de
+responsável para menores e política de cancelamento de viagem distinta de finalizar.
+Não declarar #41 inteira concluída nem reabrir frontend neste diretório.
+
+Backend #29: Excursao própria com CRUD do organizador, publicação e cancelamento
+lógico, capacidade/datas/coordenadas e controle de versão. Não cria Turma nem
+RotaPublica. Contrato: `excursoes-api.md`; migração 008. Não há inscrição pública
+habilitada, conclusão automática ou compartilhamento de convites escolares.
+Estado CONCLUIDA está reservado ao ciclo operacional da #31.
+
+Issues #40/#34/#42/#41/#29 receberam comentários de implementação/testes. Nenhuma
+issue frontend foi alterada/fechada. As issues backend permanecem abertas para
+revisão/integração; #28–#32 foram consultadas diretamente, sem reiniciar auditoria.
+
+### Próxima tarefa concreta
+
+Implementar backend **#30** sobre Excursao: convites aleatórios com hash no banco,
+expiração/revogação, endpoints limitados por convite (Firebase não obrigatório),
+credencial individual independente para consultar/cancelar a própria inscrição,
+proteção contra abuso e aprovação/reserva com lock de Excursao. Ao adicionar
+inscrições, impedir edição de capacidade abaixo da ocupação e mudanças de
+destino/horário que invalidem participantes. Não liberar endpoint anônimo genérico
+nem reutilizar tokens escolares. Depois #31 OR-Tools/check-in auditável e #32.
+#32 requer integração mobile/web em repositórios externos ao escopo desta sessão;
+registrar essa limitação, sem criar frontend aqui ou declarar demo executada.
+
+PostgreSQL descartável usado nesta sessão: container bevans-capacidade-validacao,
+ID 326834d04ef608f6aa97ce8038bacb24dd2c107490ef429b83a99fbb69087c45,
+bind 127.0.0.1:55435, PG16/bevans_validation. Schemas capacity_service,
+publication_service, boarding_service, catalog_service, favorite_service,
+gps_service, excursion_service e migration_UUID. Nenhum .env foi lido para testar.
+Container encerrado após as suítes finais, com ID conferido; --rm removeu somente
+esse banco descartável de teste. Docker Desktop permaneceu em execução.
+Para repetir, recriar container local e schemas, aplicar migrações antes de usar
+schemas antigos. Maven 3.9.14 em cache, Java 26 local com flag ByteBuddy;
+projeto continua Java 21. Não usar banco/API de produção.
+
 ## Correção organizacional — escopo exclusivo de backend
 
 Escrita restrita a C:\dev\bevans-backend. Não alterar C:\dev\bevans-frontend,
@@ -21,10 +120,9 @@ Git. Código Java, testes, migrações e documentação válida não foram remov
 Após a remoção, Maven clean verify passou e recompilou o backend do zero.
 Log desta validação: .validation-logs/cleanup-clean-verify.log.
 
-Próxima implementação somente backend: #40 embarques, depois #34 catálogo,
-#42 favoritos, #41 rastreamento, #28–#32 excursões. Consultar critérios no GitHub.
+Sequência executada e próxima tarefa estão registradas no estado vigente acima.
 
-## Estado atual após revalidação e editor urbano
+## Histórico anterior após revalidação e editor urbano
 
 Branches mantidas: fix/address-draft-stabilization, backend e frontend.
 Base desta retomada: backend 0ce77b7, frontend bf2631f, ambos limpos.

@@ -29,10 +29,17 @@ class CapacidadeMigrationPostgresIT {
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/005-favoritos.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/006-pontos-excepcionais.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/007-posicao-viagem.sql"));
+            ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/008-excursoes.sql"));
             try(var s=c.createStatement()) {
                 try(var rs=s.executeQuery("select count(*) from rotas_publicas")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
                 try(var rs=s.executeQuery("select count(*) from solicitacoes_embarque")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
                 s.execute("insert into usuarios values(1)");
+                s.execute("insert into viagem(id,turma_id) values(20,7)");
+                assertEquals(1,s.executeUpdate("insert into posicao_viagem(viagem_id,latitude,longitude,precisao) values(20,-8,-35,8)"));
+                assertEquals("23514",assertThrows(SQLException.class,()->s.executeUpdate("update posicao_viagem set latitude=91 where viagem_id=20")).getSQLState());
+                assertEquals(1,s.executeUpdate("insert into excursoes(organizador_id,titulo,destino_nome,destino_latitude,destino_longitude,partida_em,criada_em,capacidade) values(1,'Evento','Destino',-8,-35,CURRENT_TIMESTAMP+interval '1 day',CURRENT_TIMESTAMP,12)"));
+                assertEquals("23514",assertThrows(SQLException.class,()->s.executeUpdate("update excursoes set capacidade=0")).getSQLState());
+                assertEquals("23514",assertThrows(SQLException.class,()->s.executeUpdate("update excursoes set origem_nome='Origem sem pin'")).getSQLState());
                 long rotaId;
                 try(var rs=s.executeQuery("insert into rotas_publicas(turma_id,nome,cidade,categoria,modo,origem_nome,origem_latitude,origem_longitude,destino_nome,destino_latitude,destino_longitude) values(7,'Teste','Caruaru','OUTROS','FLEXIVEL','Terminal',-8,-35,'Campus',-8.1,-35.1) returning id")) {
                     assertTrue(rs.next());rotaId=rs.getLong(1);

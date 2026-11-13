@@ -49,6 +49,8 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(auth);
                 request.setAttribute("firebaseEmail", token.getEmail());
+                Object exp=token.getClaims().get("exp");
+                if(exp instanceof Number n)request.setAttribute("firebaseExpiresAt",java.time.Instant.ofEpochSecond(n.longValue()));
 
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();

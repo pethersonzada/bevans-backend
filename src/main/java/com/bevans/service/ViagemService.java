@@ -15,10 +15,12 @@ public class ViagemService {
 
     private final ViagemRepository viagemRepository;
     private final TurmaRepository turmaRepository;
+    private final com.bevans.repository.PosicaoViagemRepository posicoes;
 
-    public ViagemService(ViagemRepository viagemRepository, TurmaRepository turmaRepository) {
+    public ViagemService(ViagemRepository viagemRepository, TurmaRepository turmaRepository,com.bevans.repository.PosicaoViagemRepository posicoes) {
         this.viagemRepository = viagemRepository;
         this.turmaRepository = turmaRepository;
+        this.posicoes=posicoes;
     }
 
     @Transactional
@@ -42,11 +44,13 @@ public class ViagemService {
 
     @Transactional
     public void encerrarRota(Long turmaId) {
+        turmaRepository.lockById(turmaId).orElseThrow(()->new IllegalArgumentException("Turma não encontrada."));
         Optional<Viagem> viagemAtiva = viagemRepository.findFirstByTurmaIdAndStatus(turmaId, "EM_ANDAMENTO");
         
         if (viagemAtiva.isPresent()) {
             Viagem viagem = viagemAtiva.get();
             viagem.setStatus("FINALIZADA");
+            posicoes.findById(viagem.getId()).ifPresent(p->{p.limpar();posicoes.save(p);});
             viagemRepository.save(viagem);
         }
     }
@@ -59,6 +63,7 @@ public class ViagemService {
         if (viagemAtiva.isPresent()) {
             Viagem v = viagemAtiva.get();
             resposta.put("status", "ATIVA");
+            resposta.put("viagemId",v.getId());
             resposta.put("sentido", v.getSentido());
             resposta.put("turmaId", v.getTurma().getId());
             resposta.put("turmaNome", v.getTurma().getNome());

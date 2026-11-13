@@ -18,6 +18,7 @@ class CapacidadeMigrationPostgresIT {
                 s.execute("create table usuarios(id bigint primary key)");
                 s.execute("create table turmas(id bigint primary key,nome text)");
                 s.execute("create table aluno_turma(id bigint primary key,turma_id bigint references turmas(id),status text)");
+                s.execute("create table viagem(id bigint primary key,turma_id bigint references turmas(id))");
                 s.execute("insert into turmas values(7,'A'),(8,'B')");
                 s.execute("insert into aluno_turma values(11,7,'APROVADO')");
             }
@@ -27,6 +28,7 @@ class CapacidadeMigrationPostgresIT {
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/004-catalogo-indices.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/005-favoritos.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/006-pontos-excepcionais.sql"));
+            ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/007-posicao-viagem.sql"));
             try(var s=c.createStatement()) {
                 try(var rs=s.executeQuery("select count(*) from rotas_publicas")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
                 try(var rs=s.executeQuery("select count(*) from solicitacoes_embarque")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}

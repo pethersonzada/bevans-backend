@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.http.ResponseEntity;
@@ -49,12 +48,6 @@ public class RotaController {
     private final TurmaRepository turmaRepository;
     private final RotaService rotaService;
     private final ViagemService viagemService;
-
-    private static final Map<Long, Map<String, Double>>
-            localizacoesVans = new ConcurrentHashMap<>();
-
-    private static final Set<Long> rotasAtivas =
-            ConcurrentHashMap.newKeySet();
 
     public RotaController(
             PresencaRepository presencaRepository,
@@ -370,8 +363,6 @@ public class RotaController {
 
         viagemService.iniciarRota(turmaId, sentido);
 
-        rotasAtivas.add(turmaId);
-        localizacoesVans.remove(turmaId);
 
         return ResponseEntity.ok(
                 Map.of(
@@ -389,8 +380,6 @@ public class RotaController {
     ) {
         viagemService.encerrarRota(turmaId);
 
-        rotasAtivas.remove(turmaId);
-        localizacoesVans.remove(turmaId);
 
         return ResponseEntity.ok(
                 "Rota encerrada com sucesso."
@@ -456,22 +445,7 @@ public class RotaController {
             @RequestParam Double latitude,
             @RequestParam Double longitude
     ) {
-        if (!rotasAtivas.contains(turmaId)) {
-            return ResponseEntity.badRequest()
-                    .body("Rota inativa para esta turma.");
-        }
-
-        Map<String, Double> coords =
-                new ConcurrentHashMap<>();
-
-        coords.put("latitude", latitude);
-        coords.put("longitude", longitude);
-
-        localizacoesVans.put(turmaId, coords);
-
-        return ResponseEntity.ok(
-                "Localização atualizada."
-        );
+        return ResponseEntity.status(410).body("Use PUT /viagens/{viagemId}/localizacao com timestamp e identificador de amostra.");
     }
 
     @Operation(summary = "Buscar Localização da Van")
@@ -480,13 +454,6 @@ public class RotaController {
     public ResponseEntity<Object> obterLocalizacaoVan(
             @RequestParam Long turmaId
     ) {
-        if (!rotasAtivas.contains(turmaId)
-                || !localizacoesVans.containsKey(turmaId)) {
-            return ResponseEntity.notFound().build();
-        }
-
-        return ResponseEntity.ok(
-                localizacoesVans.get(turmaId)
-        );
+        return ResponseEntity.status(410).body("Use GET /viagens/{viagemId}/localizacao; obtenha viagemId em /rota/status-atual.");
     }
 }

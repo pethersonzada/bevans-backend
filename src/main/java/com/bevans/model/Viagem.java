@@ -27,6 +27,8 @@ public class Viagem {
 
     @Column(name = "data_criacao", updatable = false)
     private LocalDateTime dataCriacao;
+    private java.time.Instant iniciadaEm;
+    public java.time.Instant getIniciadaEm(){return iniciadaEm;}
 
     @Column(nullable = false)
     private boolean excluido = false;
@@ -34,6 +36,7 @@ public class Viagem {
     @PrePersist
     protected void onCreate() {
         this.dataCriacao = LocalDateTime.now();
+        this.iniciadaEm = java.time.Instant.now();
     }
 
     public Long getId() { return id; }

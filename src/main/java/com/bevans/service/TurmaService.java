@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.bevans.exception.TurmaComRotaAtivaException;
+import com.bevans.exception.CapacidadeException;
+import com.bevans.dto.VagasTurmaDTO;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import com.bevans.model.AlunoTurma;
 import com.bevans.model.Turma;
 import com.bevans.model.Usuario;
@@ -25,19 +29,22 @@ public class TurmaService {
     private final AlunoTurmaRepository alunoTurmaRepository;
     private final ViagemRepository viagemRepository;
     private final GeocodingService geocodingService;
+    private final EntityManager entityManager;
 
     public TurmaService(
             TurmaRepository turmaRepository,
             UsuarioRepository usuarioRepository,
             AlunoTurmaRepository alunoTurmaRepository,
             ViagemRepository viagemRepository,
-            GeocodingService geocodingService
+            GeocodingService geocodingService,
+            EntityManager entityManager
     ) {
         this.turmaRepository = turmaRepository;
         this.usuarioRepository = usuarioRepository;
         this.alunoTurmaRepository = alunoTurmaRepository;
         this.viagemRepository = viagemRepository;
         this.geocodingService = geocodingService;
+        this.entityManager = entityManager;
     }
 
     private void validarCoordenadas(
@@ -143,6 +150,7 @@ public class TurmaService {
         }
 
         turma.setNome(turma.getNome().trim());
+        validarCapacidade(turma.getCapacidade());
 
         if (turma.getCodigoConvite() == null
                 || turma.getCodigoConvite().isBlank()) {
@@ -264,12 +272,22 @@ public class TurmaService {
         }
 
         Turma turma = turmaRepository
-                .findById(turmaId)
+                .lockById(turmaId)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "Turma não encontrada."
                         )
                 );
+        entityManager.refresh(turma, LockModeType.PESSIMISTIC_WRITE);
+
+        if (turmaAtualizada.getCapacidade() != null) {
+            validarCapacidade(turmaAtualizada.getCapacidade());
+            long ocupados = alunoTurmaRepository.countByTurmaIdAndStatus(turmaId, "APROVADO");
+            if (turmaAtualizada.getCapacidade() < ocupados) {
+                throw new CapacidadeException("A capacidade não pode ser menor que os passageiros aprovados (" + ocupados + ").");
+            }
+            turma.setCapacidade(turmaAtualizada.getCapacidade());
+        }
 
         if (turmaAtualizada.getNome() != null
                 && !turmaAtualizada.getNome().isBlank()) {
@@ -364,6 +382,7 @@ public class TurmaService {
         return turmaRepository.save(turma);
     }
 
+    @Transactional
     public void solicitarEntradaPorCodigo(
             Long alunoId,
             String codigo
@@ -391,6 +410,9 @@ public class TurmaService {
                                 "Aluno não encontrado."
                         )
                 );
+
+        turma = turmaRepository.lockById(turma.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Turma não encontrada."));
 
         if (!"PASSAGEIRO".equals(aluno.getTipo())) {
             throw new IllegalArgumentException(
@@ -461,6 +483,26 @@ public class TurmaService {
             );
         }
 
+        Long turmaId = alunoTurmaRepository.turmaIdDoVinculo(vinculoId)
+                .orElseThrow(() -> new IllegalArgumentException("Solicitação não encontrada."));
+        turmaRepository.lockById(turmaId)
+                .orElseThrow(() -> new IllegalArgumentException("Turma não encontrada."));
+
+        // Consultas escalares depois do lock não reutilizam entidades antigas
+        // do contexto da autorização/OpenEntityManagerInView.
+        if (!"PENDENTE".equals(alunoTurmaRepository.statusAtual(vinculoId))) {
+            throw new IllegalArgumentException("Somente solicitações pendentes podem ser analisadas.");
+        }
+        if ("APROVADO".equals(novoStatus)) {
+            Integer capacidade = turmaRepository.capacidadeAtual(turmaId);
+            if (capacidade == null) {
+                throw new CapacidadeException("Configure a quantidade de assentos da turma antes de aprovar passageiros.");
+            }
+            if (alunoTurmaRepository.countByTurmaIdAndStatus(turmaId, "APROVADO") >= capacidade) {
+                throw new CapacidadeException("Esta turma está sem vagas disponíveis.");
+            }
+        }
+
         AlunoTurma vinculo = alunoTurmaRepository
                 .findById(vinculoId)
                 .orElseThrow(() ->
@@ -479,17 +521,35 @@ public class TurmaService {
         alunoTurmaRepository.save(vinculo);
     }
 
+    private void validarCapacidade(Integer capacidade) {
+        if (capacidade == null || capacidade <= 0) {
+            throw new IllegalArgumentException("Informe uma quantidade inteira e positiva de assentos.");
+        }
+    }
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public VagasTurmaDTO consultarVagas(Long turmaId) {
+        turmaRepository.findById(turmaId)
+                .orElseThrow(() -> new IllegalArgumentException("Turma não encontrada."));
+        Integer capacidade = turmaRepository.capacidadeAtual(turmaId);
+        long ocupados = alunoTurmaRepository.countByTurmaIdAndStatus(turmaId, "APROVADO");
+        return new VagasTurmaDTO(capacidade, ocupados,
+                capacidade == null ? null : Math.max(0L, capacidade.longValue() - ocupados), capacidade != null);
+    }
+
+    @Transactional
     public Turma regenerarCodigoConvite(
             Long turmaId
     ) {
         Turma turma = turmaRepository
-                .findById(turmaId)
+                .lockById(turmaId)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "Turma não encontrada."
                         )
                 );
 
+        entityManager.refresh(turma, LockModeType.PESSIMISTIC_WRITE);
         turma.setCodigoConvite(
                 UUID.randomUUID()
                         .toString()

@@ -34,6 +34,7 @@ class TurmaCadastroIntegrationTest {
         rascunho.setMotorista(motorista);
         rascunho.setNome("Faculdade");
         rascunho.setTurno("NOITE");
+        rascunho.setCapacidade(12);
         Long id = service.criarTurma(rascunho).getId();
         em.flush(); em.clear();
         assertNull(em.find(Turma.class, id).getOrigemLatitude());

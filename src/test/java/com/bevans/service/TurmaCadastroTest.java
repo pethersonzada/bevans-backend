@@ -19,10 +19,11 @@ class TurmaCadastroTest {
     @Mock AlunoTurmaRepository vinculos;
     @Mock ViagemRepository viagens;
     @Mock GeocodingService geocoding;
+    @Mock jakarta.persistence.EntityManager entityManager;
     TurmaService service;
 
     @BeforeEach void setup() {
-        service = new TurmaService(turmas, usuarios, vinculos, viagens, geocoding);
+        service = new TurmaService(turmas, usuarios, vinculos, viagens, geocoding, entityManager);
     }
 
     Turma rascunho() {
@@ -33,6 +34,7 @@ class TurmaCadastroTest {
         Turma turma = new Turma();
         turma.setNome("  Faculdade  ");
         turma.setTurno("NOITE");
+        turma.setCapacidade(12);
         turma.setMotorista(motorista);
         return turma;
     }
@@ -69,7 +71,7 @@ class TurmaCadastroTest {
 
     @Test void salvaOrigemEDestinoSeparadamenteEPreservaParNaoAlterado() {
         Turma turma = new Turma();
-        when(turmas.findById(7L)).thenReturn(Optional.of(turma));
+        when(turmas.lockById(7L)).thenReturn(Optional.of(turma));
         when(turmas.save(turma)).thenReturn(turma);
         Turma origem = new Turma();
         origem.setOrigemNome("Garagem");
@@ -91,7 +93,7 @@ class TurmaCadastroTest {
     @Test void mesmoNomeComNovoPinPersisteCoordenadas() {
         Turma turma = new Turma();
         turma.setOrigemNome("Garagem");
-        when(turmas.findById(7L)).thenReturn(Optional.of(turma));
+        when(turmas.lockById(7L)).thenReturn(Optional.of(turma));
         Turma patch = new Turma();
         patch.setOrigemNome("Garagem");
         patch.setOrigemLatitude(-8.2);

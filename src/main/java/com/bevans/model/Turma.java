@@ -20,6 +20,7 @@ public class Turma {
 
     private String nome;
     private String turno;
+    private Integer capacidade;
     private String codigoConvite;
 
     private String destinoNome;
@@ -60,6 +61,9 @@ private List<AlunoTurma> alunoTurmas;
     public String getTurno() {
         return turno;
     }
+
+    public Integer getCapacidade() { return capacidade; }
+    public void setCapacidade(Integer capacidade) { this.capacidade = capacidade; }
 
     public void setTurno(String turno) {
         this.turno = turno;

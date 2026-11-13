@@ -25,18 +25,20 @@ class TurmaServiceSegurancaTest {
     @Mock AlunoTurmaRepository vinculos;
     @Mock ViagemRepository viagens;
     @Mock GeocodingService geocoding;
+    @Mock jakarta.persistence.EntityManager entityManager;
 
     TurmaService service;
 
     @BeforeEach
     void configurar() {
-        service = new TurmaService(turmas, usuarios, vinculos, viagens, geocoding);
+        service = new TurmaService(turmas, usuarios, vinculos, viagens, geocoding, entityManager);
     }
 
     private void prepararConvite(Usuario usuario) {
         Turma turma = new Turma();
         turma.setId(13L);
         when(turmas.findByCodigoConvite("ABC123")).thenReturn(Optional.of(turma));
+        when(turmas.lockById(13L)).thenReturn(Optional.of(turma));
         when(usuarios.findById(usuario.getId())).thenReturn(Optional.of(usuario));
     }
 
@@ -81,6 +83,7 @@ class TurmaServiceSegurancaTest {
         AlunoTurma vinculo = new AlunoTurma();
         vinculo.setStatus("PENDENTE");
         when(vinculos.findById(11L)).thenReturn(Optional.of(vinculo));
+        prepararAnalise("PENDENTE", true);
 
         service.analisarSolicitacao(11L, "APROVADO");
 
@@ -93,6 +96,7 @@ class TurmaServiceSegurancaTest {
         AlunoTurma vinculo = new AlunoTurma();
         vinculo.setStatus("PENDENTE");
         when(vinculos.findById(11L)).thenReturn(Optional.of(vinculo));
+        prepararAnalise("PENDENTE", false);
 
         service.analisarSolicitacao(11L, "REJEITADO");
 
@@ -104,11 +108,18 @@ class TurmaServiceSegurancaTest {
     void naoPermiteReanalisarSolicitacaoRejeitada() {
         AlunoTurma vinculo = new AlunoTurma();
         vinculo.setStatus("REJEITADO");
-        when(vinculos.findById(11L)).thenReturn(Optional.of(vinculo));
+        prepararAnalise("REJEITADO", false);
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.analisarSolicitacao(11L, "APROVADO"));
         assertEquals("REJEITADO", vinculo.getStatus());
         verify(vinculos, never()).save(any(AlunoTurma.class));
+    }
+
+    private void prepararAnalise(String status, boolean aprovar) {
+        when(vinculos.turmaIdDoVinculo(11L)).thenReturn(Optional.of(13L));
+        when(turmas.lockById(13L)).thenReturn(Optional.of(new Turma()));
+        when(vinculos.statusAtual(11L)).thenReturn(status);
+        if (aprovar) when(turmas.capacidadeAtual(13L)).thenReturn(12);
     }
 }

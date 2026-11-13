@@ -32,6 +32,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/turmas")
 public class TurmaController {
 
+    @Operation(summary = "Consultar capacidade e vagas da turma", description = "Capacidade nula indica turma antiga ainda não configurada. Apenas o motorista responsável consulta este painel privado.")
+    @GetMapping("/{id}/vagas")
+    @PreAuthorize("@access.driverOfTurma(#p0)")
+    public ResponseEntity<com.bevans.dto.VagasTurmaDTO> vagas(@PathVariable Long id) {
+        return ResponseEntity.ok(turmaService.consultarVagas(id));
+    }
+
     private final TurmaService turmaService;
     private final PresencaRepository presencaRepository;
 

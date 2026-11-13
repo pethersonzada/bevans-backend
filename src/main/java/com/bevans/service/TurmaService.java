@@ -84,47 +84,17 @@ public class TurmaService {
             };
         }
 
-        // Sem coordenadas, o nome é obrigatório
-        // para tentar a geocodificação.
+        // O rascunho pode não ter percurso. Nome isolado nunca representa
+        // um ponto exato: a escolha deve ser confirmada no mapa.
 
         if (enderecoNome == null
                 || enderecoNome.isBlank()) {
 
-            throw new IllegalArgumentException(
-                    "Informe o endereço de " + campo
-                    + " ou selecione um ponto no mapa."
-            );
+            return null;
         }
 
-        try {
-            double[] coords =
-                    geocodingService.geocodificarEndereco(
-                            enderecoNome.trim(),
-                            "Pernambuco"
-                    );
-
-            if (coords == null || coords.length < 2) {
-                throw new IllegalArgumentException(
-                        "Geocodificação sem coordenadas."
-                );
-            }
-
-            validarCoordenadas(
-                    coords[0],
-                    coords[1],
-                    campo
-            );
-
-            return coords;
-
-        } catch (Exception e) {
-            throw new IllegalArgumentException(
-                    "Não foi possível localizar o endereço "
-                    + "de " + campo
-                    + ". Selecione um ponto válido no mapa.",
-                    e
-            );
-        }
+        throw new IllegalArgumentException(
+                "Selecione e confirme o ponto de " + campo + " no mapa.");
     }
 
     public Turma criarTurma(Turma turma) {
@@ -161,6 +131,8 @@ public class TurmaService {
         }
 
         turma.setMotorista(motorista);
+        turma.setId(null);
+        turma.setExcluido(false);
 
         if (turma.getNome() == null
                 || turma.getNome().isBlank()) {
@@ -201,11 +173,14 @@ public class TurmaService {
                 "origem"
         );
 
-        turma.setDestinoLatitude(destino[0]);
-        turma.setDestinoLongitude(destino[1]);
-
-        turma.setOrigemLatitude(origem[0]);
-        turma.setOrigemLongitude(origem[1]);
+        if (destino != null) {
+            turma.setDestinoLatitude(destino[0]);
+            turma.setDestinoLongitude(destino[1]);
+        }
+        if (origem != null) {
+            turma.setOrigemLatitude(origem[0]);
+            turma.setOrigemLongitude(origem[1]);
+        }
 
         // Nenhum endereço fictício é utilizado.
         return turmaRepository.save(turma);
@@ -277,6 +252,7 @@ public class TurmaService {
                 .orElse(null);
     }
 
+    @Transactional
     public Turma atualizarTurma(
             Long turmaId,
             Turma turmaAtualizada
@@ -340,6 +316,9 @@ public class TurmaService {
                     "destino"
             );
 
+            if (destino == null) {
+                throw new IllegalArgumentException("Confirme o destino no mapa.");
+            }
             turma.setDestinoLatitude(destino[0]);
             turma.setDestinoLongitude(destino[1]);
         }
@@ -363,6 +342,9 @@ public class TurmaService {
                     "origem"
             );
 
+            if (origem == null) {
+                throw new IllegalArgumentException("Confirme a origem no mapa.");
+            }
             turma.setOrigemLatitude(origem[0]);
             turma.setOrigemLongitude(origem[1]);
         }

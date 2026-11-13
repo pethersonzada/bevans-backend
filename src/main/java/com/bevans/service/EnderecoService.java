@@ -20,7 +20,11 @@ public class EnderecoService {
         this.usuarioRepository = usuarioRepository;
     }
 
+    @Transactional
     public Endereco cadastrarEndereco(Long usuarioId, Endereco enderecoRequest) {
+        validarCoordenadas(enderecoRequest.getLatitude(), enderecoRequest.getLongitude());
+        // O identificador e o proprietário vêm exclusivamente do servidor.
+        enderecoRequest.setId(null);
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
@@ -40,6 +44,16 @@ public class EnderecoService {
         return enderecoRepository.findByUsuarioId(usuarioId);
     }
 
+    private void validarCoordenadas(Double latitude, Double longitude) {
+        if (latitude == null || longitude == null
+                || !Double.isFinite(latitude) || !Double.isFinite(longitude)
+                || latitude < -90 || latitude > 90
+                || longitude < -180 || longitude > 180
+                || (latitude == 0.0 && longitude == 0.0)) {
+            throw new IllegalArgumentException("Coordenadas do endereço inválidas ou incompletas. Confirme o ponto no mapa.");
+        }
+    }
+
     @Transactional
     public Endereco atualizarEndereco(Long id, Endereco enderecoRequest) {
         Endereco endereco = enderecoRepository.findById(id)
@@ -57,29 +71,16 @@ public class EnderecoService {
         if (enderecoRequest.getBairro() != null) {
             endereco.setBairro(enderecoRequest.getBairro());
         }
-
-
-if (enderecoRequest.getLatitude() != null
-        || enderecoRequest.getLongitude() != null) {
-
-    Double latitude = enderecoRequest.getLatitude();
-    Double longitude = enderecoRequest.getLongitude();
-
-    if (latitude == null || longitude == null
-            || !Double.isFinite(latitude)
-            || !Double.isFinite(longitude)
-            || latitude < -90 || latitude > 90
-            || longitude < -180 || longitude > 180
-            || (latitude == 0.0 && longitude == 0.0)) {
-        throw new IllegalArgumentException(
-                "Coordenadas do endereço inválidas."
-        );
-    }
-
-    endereco.setLatitude(latitude);
-    endereco.setLongitude(longitude);
-}
-
+        if (enderecoRequest.getComplemento() != null) {
+            endereco.setComplemento(enderecoRequest.getComplemento());
+        }
+        if (enderecoRequest.getLatitude() != null || enderecoRequest.getLongitude() != null) {
+            Double latitude = enderecoRequest.getLatitude();
+            Double longitude = enderecoRequest.getLongitude();
+            validarCoordenadas(latitude, longitude);
+            endereco.setLatitude(latitude);
+            endereco.setLongitude(longitude);
+        }
 
         return enderecoRepository.save(endereco);
     }

@@ -58,7 +58,7 @@ Authorization: Bearer <FIREBASE_ID_TOKEN>
 ## 4. Pré-requisitos, Instalação e Configuração
 
 ### 4.1 Requisitos de Ambiente
-* Java Development Kit (JDK) 17 ou superior.
+* Java Development Kit (JDK) 21 (versão definida no Maven).
 * Apache Maven 3.8+.
 * Banco de Dados PostgreSQL 14+.
 * Conta Google Firebase configurada com Firebase Admin SDK.
@@ -72,4 +72,16 @@ SPRING_DATASOURCE_PASSWORD=sua_senha
 FIREBASE_CONFIG_PATH=classpath:firebase-service-account.json
 MAPBOX_SECRET_TOKEN=sk.xxxxxxxxxxxx
 ```
+
+## Contratos e validação incremental
+
+- [Auditoria e evidências locais](docs/auditoria-e-execucao.md)
+- [Capacidade por turma, migração e recuperação](docs/capacidade-turmas.md)
+- [Estado exato e próximos passos](docs/retomada.md)
+
+O cadastro de turma aceita rascunho sem percurso e exige `capacidade` inteira
+positiva. Origem/destino são confirmados por coordenadas no mapa, em PUTs
+separados. `GET /turmas/{id}/vagas` retorna ocupação para o motorista responsável.
+Turmas antigas sem capacidade preservam dados e exigem configuração antes de
+novas aprovações. Não executar migrações em produção sem validação e autorização.
 

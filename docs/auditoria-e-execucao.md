@@ -82,13 +82,24 @@ README backend diz Java 17+, mas pom exige Java **21**.
 - Não houve teste Android/iOS, dois dispositivos, provedor real de endereços,
   PostgreSQL ou ponta a ponta. Não fechar #25/#44 com base apenas nessa bateria.
 
+## Segundo lote: capacidade por turma (#35 / frontend #20)
+
+Implementados capacidade nullable para legado, valor positivo obrigatório no
+cadastro novo, edição do motorista, contagem de aprovados e vagas, proteção
+transacional da última vaga/redução e deduplicação de pedidos concorrentes por
+código. Frontend tem campos no cadastro/edição e confirma valor salvo na API.
+Script incremental sem backfill arbitrário em docs/migrations; contrato e
+recuperação em capacidade-turmas.md. Backend: **104 testes passaram**; frontend:
+**68 testes**, arquitetura e TypeScript passaram. Migração smoke-testada apenas
+em H2 PostgreSQL mode; PostgreSQL real e dispositivo seguem pendentes.
+
 ## Próximas etapas
 
 Validar cadastro/mapa em dispositivo isolado. Confirmação de retorno do PUT e
 reabertura do mapa implementadas: serviço compara ID/coordenadas, lê novamente
 a lista autorizada quando PUT retorna corpo vazio, e tela carrega ponto salvo
-com estado de erro/tentar novamente. Em seguida implementar capacidade por turma (#35),
-migração e concorrência; integrar campos do frontend #20. Depois #33/#39
+com estado de erro/tentar novamente. Capacidade implementada conforme segundo lote;
+completar cancelamento próprio de solicitação e validar PostgreSQL/dispositivo. Depois #33/#39
 (publicação/modos/paradas), #34/#40/#42 (descoberta/embarques/favoritos), #41
 (viagem/GPS) e excursões #29/#30/#31/#32. Cada etapa deve ter commit e atualização
 objetiva das issues, sem fechá-las por cobertura parcial.

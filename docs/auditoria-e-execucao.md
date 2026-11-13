@@ -1,5 +1,20 @@
 # Auditoria e execução — 13/11/2026
 
+## Retomada posterior — estado atual
+
+Sem reiniciar a auditoria: os lotes foram revalidados e ampliados. PostgreSQL 16
+local descartável executou migrações 001/002 e testes de capacidade/concorrência.
+Backend final: **125 testes padrão aprovados**, mais **14 execuções PostgreSQL**
+em perfil separado. Frontend: arquitetura, TypeScript e **72 testes aprovados**.
+Não foram encontrados cinco testes removidos: baseline de 104 foi reproduzida;
+não há evidência local da execução anterior de 109. Ver validacao-retomada.md.
+
+Implementados cancelamento/consulta própria e pedido público de vaga (#35),
+publicação explícita/paradas/planejamento FIXA/FLEXIVEL (#33/#39), e editor mobile
+do motorista (#26). Endpoints e limites em rotas-publicas-api.md. Sem teste nativo:
+ADB não encontrou aparelho/emulador. Estado exato, commits e próxima tarefa #40/#27
+em retomada.md. Seções abaixo preservam o histórico anterior desta execução.
+
 ## Base examinada
 
 - Backend: `365b930`, branch e árvore inicialmente sem alterações locais.

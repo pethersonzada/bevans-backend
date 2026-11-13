@@ -25,11 +25,13 @@ public class RotaPublicaService {
     private final TurmaService turmaService;
     private final EntityManager em;
     private final int limiteParadas;
+    private final EmbarqueRepository embarques;
     public RotaPublicaService(RotaPublicaRepository rotas,ParadaPublicaRepository paradas,TurmaRepository turmas,
             AlunoTurmaRepository vinculos,UsuarioRepository usuarios,ViagemRepository viagens,TurmaService turmaService,
-            EntityManager em,@Value("${app.rotas-publicas.limite-paradas:50}") int limiteParadas) {
+            EntityManager em,@Value("${app.rotas-publicas.limite-paradas:50}") int limiteParadas,EmbarqueRepository embarques) {
         this.rotas=rotas;this.paradas=paradas;this.turmas=turmas;this.vinculos=vinculos;this.usuarios=usuarios;
         this.viagens=viagens;this.turmaService=turmaService;this.em=em;this.limiteParadas=limiteParadas;
+        this.embarques=embarques;
     }
     private RuntimeException naoEncontrada() {return new ResponseStatusException(HttpStatus.NOT_FOUND,"Rota não encontrada.");}
     private Turma lockTurma(Long id) {
@@ -82,6 +84,9 @@ public class RotaPublicaService {
     public RotaPublicaDTO atualizar(Long id,Long motoristaId,RotaPublicaRequest dados) {
         RotaPublica r=lockRota(id,motoristaId);
         if(dados==null || !Objects.equals(dados.turmaId(),r.getTurma().getId())) throw new IllegalArgumentException("Não é permitido trocar a turma da rota.");
+        if(!embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"))).isEmpty()
+                && (dados.modo()!=r.getModo()||!Objects.equals(dados.dias(),r.getDias())||!Objects.equals(dados.horarioIda(),r.getHorarioIda())||!Objects.equals(dados.horarioVolta(),r.getHorarioVolta())))
+            throw new SolicitacaoConflictException("Há embarques aprovados: preserve modalidade, dias e horários.");
         aplicar(r,dados);return dto(rotas.saveAndFlush(r));
     }
     @Transactional
@@ -106,6 +111,14 @@ public class RotaPublicaService {
         for(ParadaPublicaDTO p:dados) {
             if(p==null)throw new IllegalArgumentException("Parada inválida.");texto(p.nome(),"nome da parada",120);coordenadas(p.latitude(),p.longitude());
             if(p.id()!=null && (!porId.containsKey(p.id()) || !ids.add(p.id()))) throw new IllegalArgumentException("Parada duplicada ou pertencente a outra rota.");
+        }
+        var confirmados=embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        for(SolicitacaoEmbarque e:confirmados) {
+            if(e.getParada()==null)continue;
+            ParadaPublica atual=porId.get(e.getParada().getId());
+            ParadaPublicaDTO nova=dados.stream().filter(p->Objects.equals(p.id(),e.getParada().getId())).findFirst().orElse(null);
+            if(atual==null||nova==null||nova.latitude()!=atual.getLatitude()||nova.longitude()!=atual.getLongitude()||!Objects.equals(nova.horario(),atual.getHorario()))
+                throw new SolicitacaoConflictException("Uma parada com embarque aprovado não pode ser removida ou reposicionada.");
         }
         // Exclusão lógica preserva IDs usados por futuras solicitações/viagens.
         existentes.forEach(p->p.setAtiva(false));

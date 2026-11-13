@@ -44,6 +44,10 @@ public class RotaPublica {
     private boolean publicada;
     @Column(nullable=false)
     private boolean ativa;
+    @Column(nullable=false)
+    private boolean permitePontoExcepcional;
+    public boolean getPermitePontoExcepcional() { return permitePontoExcepcional; }
+    public void setPermitePontoExcepcional(boolean valor) { permitePontoExcepcional=valor; }
     @Version
     private long versao;
     @ElementCollection(fetch=FetchType.EAGER)

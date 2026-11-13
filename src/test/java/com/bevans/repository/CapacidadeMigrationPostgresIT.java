@@ -26,6 +26,7 @@ class CapacidadeMigrationPostgresIT {
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/003-embarques.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/004-catalogo-indices.sql"));
             ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/005-favoritos.sql"));
+            ScriptUtils.executeSqlScript(c,new FileSystemResource("docs/migrations/006-pontos-excepcionais.sql"));
             try(var s=c.createStatement()) {
                 try(var rs=s.executeQuery("select count(*) from rotas_publicas")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}
                 try(var rs=s.executeQuery("select count(*) from solicitacoes_embarque")) {assertTrue(rs.next());assertEquals(0,rs.getLong(1));}

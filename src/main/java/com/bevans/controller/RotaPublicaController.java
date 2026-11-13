@@ -41,6 +41,10 @@ public class RotaPublicaController {
     @Operation(summary="Publicar ou retirar do catálogo",description="Body {valor:true/false}; exige capacidade configurada e rota ativa; bloqueado durante viagem.")
     public RotaPublicaDTO publicar(@PathVariable Long id,@RequestBody EstadoRequest dados){return service.publicar(id,access.usuario().getId(),estado(dados));}
 
+    @PutMapping("/{id}/pontos-excepcionais") @PreAuthorize("@rotasPublicasAccess.own(#p0)")
+    @Operation(summary="Permitir pedidos excepcionais em FIXA",description="Desabilitado por padrão. Não aprova pedidos nem publica pins automaticamente; bloqueado durante viagem.")
+    public RotaPublicaDTO pontosExcepcionais(@PathVariable Long id,@RequestBody EstadoRequest dados){return service.permitirPontoExcepcional(id,access.usuario().getId(),estado(dados));}
+
     @PutMapping("/{id}/disponibilidade") @PreAuthorize("@rotasPublicasAccess.own(#p0)")
     public RotaPublicaDTO disponibilidade(@PathVariable Long id,@RequestBody EstadoRequest dados){return service.disponibilidade(id,access.usuario().getId(),estado(dados));}
 

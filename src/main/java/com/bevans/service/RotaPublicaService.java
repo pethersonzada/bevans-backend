@@ -90,6 +90,11 @@ public class RotaPublicaService {
         aplicar(r,dados);return dto(rotas.saveAndFlush(r));
     }
     @Transactional
+    public RotaPublicaDTO permitirPontoExcepcional(Long id,Long motoristaId,boolean permitir) {
+        RotaPublica r=lockRota(id,motoristaId);
+        r.setPermitePontoExcepcional(permitir);return dto(rotas.saveAndFlush(r));
+    }
+    @Transactional
     public RotaPublicaDTO publicar(Long id,Long motoristaId,boolean publicada) {
         RotaPublica r=lockRota(id,motoristaId);
         if(publicada && (turmas.capacidadeAtual(r.getTurma().getId())==null || !r.getAtiva()))
@@ -166,6 +171,6 @@ public class RotaPublicaService {
         return new RotaPublicaDTO(r.getId(),r.getTurma().getId(),r.getNome(),r.getCidade(),r.getCategoria(),r.getModo(),r.getOrigemNome(),
                 r.getOrigemLatitude(),r.getOrigemLongitude(),r.getDestinoNome(),r.getDestinoLatitude(),r.getDestinoLongitude(),r.getDescricao(),
                 r.getRegiao(),r.getCampus(),Set.copyOf(r.getDias()),r.getHorarioIda(),r.getHorarioVolta(),r.getPublicada(),r.getAtiva(),
-                turmaService.consultarVagas(r.getTurma().getId()),pontos,false);
+                turmaService.consultarVagas(r.getTurma().getId()),pontos,false,r.getPermitePontoExcepcional());
     }
 }

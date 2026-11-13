@@ -56,6 +56,24 @@ class EmbarqueIntegrationTest {
         var outra=cenario(ModoRota.FIXA,12);
         assertThrows(IllegalArgumentException.class,()->service.solicitar(c.rota(),aluno,fixo(outra)));
     }
+    @Test void excecaoFixaDependeDeOptInDoDonoEPermanecePrivada() {
+        var c=cenario(ModoRota.FIXA,12);Long aluno=usuario("PASSAGEIRO").getId();
+        assertFalse(rotas.consultar(c.rota()).permitePontoExcepcional());
+        assertThrows(AccessDeniedException.class,()->rotas.permitirPontoExcepcional(c.rota(),usuario("MOTORISTA").getId(),true));
+        assertTrue(rotas.permitirPontoExcepcional(c.rota(),c.dono(),true).permitePontoExcepcional());
+        var e=service.solicitar(c.rota(),aluno,flexivel());
+        assertEquals(3,service.planejamento(c.rota(),c.dono(),data(),"IDA",true).size());
+        rotas.permitirPontoExcepcional(c.rota(),c.dono(),false);
+        assertThrows(SolicitacaoConflictException.class,()->service.analisar(e.id(),c.dono(),StatusEmbarque.APROVADO));
+        rotas.permitirPontoExcepcional(c.rota(),c.dono(),true);
+        service.analisar(e.id(),c.dono(),StatusEmbarque.APROVADO);
+        rotas.permitirPontoExcepcional(c.rota(),c.dono(),false);
+        var pontos=service.planejamento(c.rota(),c.dono(),data(),"IDA",true);
+        assertEquals(4,pontos.size());assertEquals(c.parada(),pontos.get(1).paradaId());
+        assertEquals(1,rotas.consultar(c.rota()).paradas().size());
+        viagens.iniciarRota(c.turma(),"IDA");
+        assertThrows(SolicitacaoConflictException.class,()->rotas.permitirPontoExcepcional(c.rota(),c.dono(),true));
+    }
     @Test void pinPendenteNaoEntraNaRotaEAprovadoContinuaPrivado() {
         var c=cenario(ModoRota.FLEXIVEL,12);Long aluno=usuario("PASSAGEIRO").getId();
         var e=service.solicitar(c.rota(),aluno,flexivel());

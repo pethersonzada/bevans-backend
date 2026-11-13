@@ -85,7 +85,7 @@ public class EmbarqueService {
             if(d.latitude()!=null||d.longitude()!=null||d.nomePonto()!=null||Boolean.TRUE.equals(d.pontoConfirmado()))throw new IllegalArgumentException("Envie somente paradaId ao escolher uma parada cadastrada.");
             ParadaPublica p=parada(r,d.paradaId());e.setParada(p);e.setNomePonto(p.getNome());e.setLatitude(p.getLatitude());e.setLongitude(p.getLongitude());
         } else {
-            if(r.getModo()!=ModoRota.FLEXIVEL)throw new IllegalArgumentException("Rota FIXA exige uma parada cadastrada.");
+            if(r.getModo()!=ModoRota.FLEXIVEL&&!r.getPermitePontoExcepcional())throw new IllegalArgumentException("Rota FIXA exige uma parada cadastrada ou permissão explícita de exceção.");
             if(!Boolean.TRUE.equals(d.pontoConfirmado())||d.nomePonto()==null||d.nomePonto().isBlank()||d.nomePonto().trim().length()>120)
                 throw new IllegalArgumentException("Confirme o pin e o nome do ponto de embarque.");
             coordenadas(d.latitude(),d.longitude());e.setNomePonto(d.nomePonto().trim());e.setLatitude(d.latitude());e.setLongitude(d.longitude());
@@ -113,6 +113,8 @@ public class EmbarqueService {
         if(e.getStatus()!=StatusEmbarque.PENDENTE)throw new SolicitacaoConflictException("Pedido já foi analisado ou cancelado.");
         if(status==StatusEmbarque.APROVADO) {
             if(!r.getAtiva()||!r.getPublicada())throw new SolicitacaoConflictException("Rota indisponível para aprovação.");
+            if(e.getParada()==null&&r.getModo()==ModoRota.FIXA&&!r.getPermitePontoExcepcional())
+                throw new SolicitacaoConflictException("Motorista desabilitou pedidos excepcionais nesta rota FIXA.");
             if(e.getParada()!=null) {
                 ParadaPublica p=parada(r,e.getParada().getId());
                 e.setNomePonto(p.getNome());e.setLatitude(p.getLatitude());e.setLongitude(p.getLongitude());

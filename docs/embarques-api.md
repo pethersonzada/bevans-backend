@@ -48,3 +48,13 @@ Recuperação mantém tabela e histórico ao voltar aplicação. Não executar D
 Testes automatizados cobrem service/persistência, HTTP, capacidade, duplicação,
 concorrência, temporalidade e privacidade, em H2 e PostgreSQL isolado.
 Nenhum código de frontend foi criado ou alterado nesta implementação.
+
+## Exceções explícitas em FIXA
+
+`PUT /rotas-publicas/{id}/pontos-excepcionais` com `{"valor":true}` e token do
+motorista responsável permite pedidos de pin confirmado em FIXA. Padrão false;
+o DTO de detalhes informa `permitePontoExcepcional`. Configuração bloqueada
+durante viagem. Desabilitar impede novos pins e aprovações pendentes; não cancela
+embarques já aprovados. Pins continuam privados e exigem aprovação individual.
+Plano FIXA preserva a ordem relativa das paradas cadastradas e inclui exceções
+aprovadas antes do destino, sem otimização automática. Migração incremental 006.

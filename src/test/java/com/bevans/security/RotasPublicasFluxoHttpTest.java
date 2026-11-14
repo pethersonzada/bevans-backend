@@ -35,7 +35,7 @@ class RotasPublicasFluxoHttpTest {
         Usuario dono=usuario("driver-http","MOTORISTA");usuario("passenger-http","PASSAGEIRO");usuario("other-http","PASSAGEIRO");
         FirebaseAuth auth=mock(FirebaseAuth.class);
         for(String uid:List.of("driver-http","passenger-http","other-http")) {
-            FirebaseToken token=mock(FirebaseToken.class);when(token.getUid()).thenReturn(uid);when(auth.verifyIdToken(uid)).thenReturn(token);
+            FirebaseToken token=mock(FirebaseToken.class);when(token.getUid()).thenReturn(uid);when(auth.verifyIdToken(uid,true)).thenReturn(token);
         }
         try(var scope=mockStatic(FirebaseAuth.class)) {
             scope.when(FirebaseAuth::getInstance).thenReturn(auth);

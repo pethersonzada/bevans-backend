@@ -38,7 +38,7 @@ class InscricaoFluxoHttpTest {
         mvc.perform(get("/publico/excursoes/inscricao").param("inscricaoId",id.toString())).andExpect(status().isNotFound());
         mvc.perform(get("/excursoes/"+e.id()+"/inscricoes").header("X-Inscricao",token)).andExpect(status().isUnauthorized());
         mvc.perform(get("/viagens/1/localizacao").header("X-Inscricao",token)).andExpect(status().isUnauthorized());
-        FirebaseAuth auth=mock(FirebaseAuth.class);FirebaseToken decoded=mock(FirebaseToken.class);when(decoded.getUid()).thenReturn(uid);when(auth.verifyIdToken("motorista-teste")).thenReturn(decoded);
+        FirebaseAuth auth=mock(FirebaseAuth.class);FirebaseToken decoded=mock(FirebaseToken.class);when(decoded.getUid()).thenReturn(uid);when(auth.verifyIdToken("motorista-teste",true)).thenReturn(decoded);
         try(var scope=mockStatic(FirebaseAuth.class)){
             scope.when(FirebaseAuth::getInstance).thenReturn(auth);
             mvc.perform(put("/excursoes/"+e.id()+"/inscricoes/"+id+"/confirmacao").header("Authorization","Bearer motorista-teste"))

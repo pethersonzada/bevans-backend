@@ -27,7 +27,7 @@ public class UsuarioService {
         this.viagemRepository = viagemRepository;
     }
 
-    public Usuario cadastrarUsuario(Usuario usuario) {
+    @Transactional public Usuario cadastrarUsuario(Usuario usuario) {
         if (usuarioRepository.findByEmail(usuario.getEmail()).isPresent()) {
             throw new ConflitoException("E-mail já cadastrado");
         }
@@ -35,7 +35,8 @@ public class UsuarioService {
             throw new ConflitoException("Telefone já cadastrado");
         }
         
-        return usuarioRepository.save(usuario);
+        if(usuario.getFirebaseUid()!=null&&usuarioRepository.findByFirebaseUid(usuario.getFirebaseUid()).isPresent())throw new ConflitoException("Identidade Firebase já cadastrada");
+        try{return usuarioRepository.saveAndFlush(usuario);}catch(org.springframework.dao.DataIntegrityViolationException ex){throw new ConflitoException("Identidade, email ou telefone já cadastrados");}
     }
 
     public Usuario buscarPorId(Long id) {

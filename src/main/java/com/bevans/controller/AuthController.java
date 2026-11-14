@@ -1,17 +1,10 @@
 package com.bevans.controller;
 
-import com.bevans.exception.RecursoNaoEncontradoException;
-
-import org.springframework.security.access.AccessDeniedException;
-
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import com.bevans.model.Usuario;
-import com.bevans.repository.UsuarioRepository;
+import com.bevans.service.AutenticacaoPerfilService;
 import com.bevans.security.AccessPolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,43 +13,17 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
-    private final UsuarioRepository usuarios;
     private final AccessPolicy access;
+    private final AutenticacaoPerfilService perfis;
 
-    public AuthController(UsuarioRepository usuarios, AccessPolicy access) {
-        this.usuarios = usuarios;
-        this.access = access;
-    }
+    public AuthController(AccessPolicy access,AutenticacaoPerfilService perfis){this.access=access;this.perfis=perfis;}
 
     @Operation(summary = "Login vinculado à identidade Firebase verificada")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(required=true,content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=com.bevans.dto.ContratosEntrada.Login.class)))
     @PostMapping("/login")
     public ResponseEntity<Object> login(@RequestBody Map<String, String> payload,
                                         HttpServletRequest request) {
-        String uid = access.uid();
-        String emailToken = (String) request.getAttribute("firebaseEmail");
-        String emailInformado = payload == null ? null : payload.get("email");
-        if (uid == null || emailToken == null || emailInformado == null
-                || !emailToken.equalsIgnoreCase(emailInformado.trim())) {
-            throw new AccessDeniedException("Identidade não corresponde ao token Firebase.");
-        }
-
-        Usuario usuario = usuarios.findByEmail(emailToken)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Perfil não encontrado."));
-        if (usuario.getFirebaseUid() != null
-                && !Objects.equals(usuario.getFirebaseUid(), uid)) {
-            throw new AccessDeniedException("Perfil pertence a outra identidade.");
-        }
-        if (usuario.getFirebaseUid() == null) {
-            usuario.setFirebaseUid(uid);
-            usuarios.save(usuario);
-        }
-        Map<String, String> resposta = new HashMap<>();
-        resposta.put("id", usuario.getId().toString());
-        resposta.put("tipo", usuario.getTipo());
-        resposta.put("nome", usuario.getNome() == null ? "" : usuario.getNome());
-        resposta.put("endereco", usuario.getEnderecoCompleto() == null
-                ? "" : usuario.getEnderecoCompleto());
-        return ResponseEntity.ok(resposta);
+        return ResponseEntity.ok(perfis.login(access.uid(),payload==null?null:payload.get("email"),
+            (String)request.getAttribute("firebaseEmail"),Boolean.TRUE.equals(request.getAttribute("firebaseEmailVerified"))));
     }
 }

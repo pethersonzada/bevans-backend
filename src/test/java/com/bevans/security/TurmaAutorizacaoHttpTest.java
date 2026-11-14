@@ -63,7 +63,7 @@ class TurmaAutorizacaoHttpTest {
         FirebaseAuth auth = mock(FirebaseAuth.class);
         FirebaseToken decoded = mock(FirebaseToken.class);
         when(decoded.getUid()).thenReturn(uid);
-        when(auth.verifyIdToken(token)).thenReturn(decoded);
+        when(auth.verifyIdToken(token,true)).thenReturn(decoded);
         MockedStatic<FirebaseAuth> scope = mockStatic(FirebaseAuth.class);
         scope.when(FirebaseAuth::getInstance).thenReturn(auth);
         return scope;
@@ -86,7 +86,7 @@ class TurmaAutorizacaoHttpTest {
     @Test
     void tokenInvalidoRecebe401() throws Exception {
         FirebaseAuth auth = mock(FirebaseAuth.class);
-        when(auth.verifyIdToken("invalido")).thenThrow(new IllegalArgumentException("token inválido"));
+        when(auth.verifyIdToken("invalido",true)).thenThrow(new IllegalArgumentException("token inválido"));
         try (MockedStatic<FirebaseAuth> scope = mockStatic(FirebaseAuth.class)) {
             scope.when(FirebaseAuth::getInstance).thenReturn(auth);
             mvc.perform(get("/turmas/13/passageiros")

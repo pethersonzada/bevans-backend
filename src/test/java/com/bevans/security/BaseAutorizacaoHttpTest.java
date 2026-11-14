@@ -50,7 +50,7 @@ abstract class BaseAutorizacaoHttpTest {
         FirebaseAuth auth = mock(FirebaseAuth.class);
         FirebaseToken decoded = mock(FirebaseToken.class);
         when(decoded.getUid()).thenReturn(uid);
-        when(auth.verifyIdToken(token)).thenReturn(decoded);
+        when(auth.verifyIdToken(token,true)).thenReturn(decoded);
         MockedStatic<FirebaseAuth> scope = mockStatic(FirebaseAuth.class);
         scope.when(FirebaseAuth::getInstance).thenReturn(auth);
         return scope;

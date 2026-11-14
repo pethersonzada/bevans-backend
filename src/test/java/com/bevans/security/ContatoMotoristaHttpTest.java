@@ -24,4 +24,12 @@ class ContatoMotoristaHttpTest extends BaseAutorizacaoHttpTest {
             mvc.perform(get("/usuarios/por-uid/terceiro").header("Authorization","Bearer valido")).andExpect(status().isForbidden());
         }
     }
+    @Test void cadastroResponsavelNaoPermiteEscalarAdminOuAlterarIdentidade()throws Exception{
+        var auth=mock(com.google.firebase.auth.FirebaseAuth.class);var token=mock(com.google.firebase.auth.FirebaseToken.class);when(token.getUid()).thenReturn("responsavel");when(token.getEmail()).thenReturn("r@test.invalid");when(auth.verifyIdToken("valido",true)).thenReturn(token);when(usuarioService.cadastrarUsuario(any())).thenAnswer(i->i.getArgument(0));
+        try(var scope=mockStatic(com.google.firebase.auth.FirebaseAuth.class)){scope.when(com.google.firebase.auth.FirebaseAuth::getInstance).thenReturn(auth);
+            mvc.perform(post("/usuarios/cadastrar").header("Authorization","Bearer valido").contentType("application/json").content("{\"nome\":\"R\",\"telefone\":\"5581999998888\",\"email\":\"r@test.invalid\",\"firebaseUid\":\"responsavel\",\"tipo\":\"RESPONSAVEL\",\"id\":999}")) .andExpect(status().isOk()).andExpect(jsonPath("$.tipo").value("RESPONSAVEL"));
+            mvc.perform(post("/usuarios/cadastrar").header("Authorization","Bearer valido").contentType("application/json").content("{\"email\":\"r@test.invalid\",\"firebaseUid\":\"responsavel\",\"tipo\":\"ADMIN\"}")) .andExpect(status().isBadRequest());
+            mvc.perform(post("/usuarios/cadastrar").header("Authorization","Bearer valido").contentType("application/json").content("{\"email\":\"r@test.invalid\",\"firebaseUid\":\"terceiro\",\"tipo\":\"RESPONSAVEL\"}")) .andExpect(status().isForbidden());
+        }verify(usuarioService).cadastrarUsuario(argThat(u->u.getId()==null&&u.getTipo().equals("RESPONSAVEL")&&u.getFirebaseUid().equals("responsavel")));
+    }
 }

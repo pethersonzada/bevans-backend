@@ -38,7 +38,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
             try {
                 FirebaseToken token = FirebaseAuth.getInstance()
-                        .verifyIdToken(header.substring(7));
+                        .verifyIdToken(header.substring(7),true);
 
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(
@@ -49,9 +49,16 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(auth);
                 request.setAttribute("firebaseEmail", token.getEmail());
+                request.setAttribute("firebaseEmailVerified",Boolean.TRUE.equals(token.getClaims().get("email_verified")));
                 Object exp=token.getClaims().get("exp");
                 if(exp instanceof Number n)request.setAttribute("firebaseExpiresAt",java.time.Instant.ofEpochSecond(n.longValue()));
 
+            } catch (com.google.firebase.auth.FirebaseAuthException e) {
+                SecurityContextHolder.clearContext();
+                if(e.getErrorCode()==com.google.firebase.ErrorCode.UNAVAILABLE||e.getErrorCode()==com.google.firebase.ErrorCode.INTERNAL||e.getErrorCode()==com.google.firebase.ErrorCode.DEADLINE_EXCEEDED||e.getErrorCode()==com.google.firebase.ErrorCode.RESOURCE_EXHAUSTED)
+                    HttpErrorWriter.write(request,response,503,"Autenticação temporariamente indisponível; tente novamente.");
+                else unauthorized(request,response);
+                return;
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();
                 unauthorized(request, response);

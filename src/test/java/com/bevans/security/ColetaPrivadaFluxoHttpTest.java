@@ -31,7 +31,7 @@ class ColetaPrivadaFluxoHttpTest {
         var p=new Presenca();p.setTurma(t);p.setUsuario(aluno);p.setData(LocalDate.now(ZoneId.of("America/Sao_Paulo")));p.setStatus("NAO_VOU");p.setEnderecoIda(a);p.setEnderecoVolta(b);presencas.save(p);
         for(String s:List.of("IDA","VOLTA")){var cfg=service.configurar(t.getId(),s,dono.getFirebaseUid(),new ColetaPrivadaRequest(ModoColetaPrivada.PARADAS_DEFINIDAS,0L,List.of(new ColetaPrivadaRequest.Parada(null,"Praça",-8.2,-35.2,null,true))));service.escolher(t.getId(),s,aluno.getFirebaseUid(),null,cfg.paradas().get(0).id(),cfg.versao());}
         mvc.perform(get("/turmas/"+t.getId()+"/coleta/IDA")).andExpect(status().isUnauthorized());
-        FirebaseAuth auth=mock(FirebaseAuth.class);FirebaseToken decoded=mock(FirebaseToken.class);when(decoded.getUid()).thenReturn(aluno.getFirebaseUid());when(auth.verifyIdToken("valido")).thenReturn(decoded);
+        FirebaseAuth auth=mock(FirebaseAuth.class);FirebaseToken decoded=mock(FirebaseToken.class);when(decoded.getUid()).thenReturn(aluno.getFirebaseUid());when(auth.verifyIdToken("valido",true)).thenReturn(decoded);
         try(var scope=mockStatic(FirebaseAuth.class)){
             scope.when(FirebaseAuth::getInstance).thenReturn(auth);
             mvc.perform(post("/rota/confirmar").param("turmaId",t.getId().toString()).param("usuarioId",aluno.getId().toString()).param("status","AMBOS").header("Authorization","Bearer valido")).andExpect(status().isOk());

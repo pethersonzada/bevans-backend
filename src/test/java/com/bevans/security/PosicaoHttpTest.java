@@ -45,7 +45,7 @@ class PosicaoHttpTest extends BaseAutorizacaoHttpTest {
     @Test void sseUsaExpiracaoVerificadaPeloFirebaseESemBufferDoProxy() throws Exception {
         FirebaseAuth auth=mock(FirebaseAuth.class);FirebaseToken token=mock(FirebaseToken.class);
         Instant expira=Instant.now().plusSeconds(600);when(token.getUid()).thenReturn("uid");when(token.getClaims()).thenReturn(Map.of("exp",expira.getEpochSecond()));
-        when(auth.verifyIdToken("valido")).thenReturn(token);
+        when(auth.verifyIdToken("valido",true)).thenReturn(token);
         when(streams.abrir(eq(1L),eq("uid"),eq(Instant.ofEpochSecond(expira.getEpochSecond())))).thenReturn(new SseEmitter(1000L));
         try(var scope=mockStatic(FirebaseAuth.class)){
             scope.when(FirebaseAuth::getInstance).thenReturn(auth);

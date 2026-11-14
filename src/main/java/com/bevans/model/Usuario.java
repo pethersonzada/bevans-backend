@@ -21,7 +21,7 @@ public class Usuario {
     @com.fasterxml.jackson.annotation.JsonIgnore
     private String email;
 
-    @Column(nullable = true)
+    @Column(nullable = true,unique=true)
     @com.fasterxml.jackson.annotation.JsonIgnore
     private String firebaseUid;
 

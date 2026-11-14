@@ -141,7 +141,7 @@ listarPassageiros() {
             throw new AccessDeniedException("Dados não correspondem ao token Firebase.");
         }
 
-        if (!"PASSAGEIRO".equals(tipo) && !"MOTORISTA".equals(tipo)) {
+        if (!"PASSAGEIRO".equals(tipo) && !"MOTORISTA".equals(tipo) && !"RESPONSAVEL".equals(tipo)) {
             throw new IllegalArgumentException("Tipo de usuário inválido.");
         }
 

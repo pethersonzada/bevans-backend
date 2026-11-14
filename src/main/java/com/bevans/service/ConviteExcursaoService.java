@@ -16,7 +16,8 @@ public class ConviteExcursaoService {
     private final ConviteExcursaoRepository convites;private final ExcursaoRepository excursoes;
     private final UsuarioRepository usuarios;private final ParadaExcursaoRepository paradas;private final EntityManager em;private final Clock clock;
     private final InscricaoExcursaoRepository inscricoes;
-    public ConviteExcursaoService(ConviteExcursaoRepository c,ExcursaoRepository e,UsuarioRepository u,ParadaExcursaoRepository p,EntityManager em,Clock clock,InscricaoExcursaoRepository inscricoes){convites=c;excursoes=e;usuarios=u;paradas=p;this.em=em;this.clock=clock;this.inscricoes=inscricoes;}
+    private final ExecucaoExcursaoRepository execucoes;
+    public ConviteExcursaoService(ConviteExcursaoRepository c,ExcursaoRepository e,UsuarioRepository u,ParadaExcursaoRepository p,EntityManager em,Clock clock,InscricaoExcursaoRepository inscricoes,ExecucaoExcursaoRepository execucoes){convites=c;excursoes=e;usuarios=u;paradas=p;this.em=em;this.clock=clock;this.inscricoes=inscricoes;this.execucoes=execucoes;}
     private ResponseStatusException indisponivel(){return new ResponseStatusException(HttpStatus.NOT_FOUND,"Convite indisponível.");}
     private Excursao dono(Long id,String uid,boolean lock){
         Usuario u=usuarios.findByFirebaseUid(uid).filter(v->"MOTORISTA".equals(v.getTipo())).orElseThrow(()->new AccessDeniedException("Organizador inválido."));
@@ -24,7 +25,7 @@ public class ConviteExcursaoService {
         if(lock)em.refresh(e,LockModeType.PESSIMISTIC_WRITE);
         if(!Objects.equals(e.getOrganizador().getId(),u.getId()))throw new AccessDeniedException("Excursão de outro organizador.");return e;
     }
-    private void disponivel(Excursao e){if(e.getEstado()!=EstadoExcursao.PUBLICADA||!e.getPartidaEm().isAfter(clock.instant()))throw indisponivel();}
+    private void disponivel(Excursao e){if(e.getEstado()!=EstadoExcursao.PUBLICADA||!e.getPartidaEm().isAfter(clock.instant())||execucoes.existsByExcursaoId(e.getId()))throw indisponivel();}
     @Transactional public ConviteEmitidoDTO emitir(Long id,String uid,Instant expira){
         Excursao e=dono(id,uid,true);disponivel(e);
         if(expira==null||!expira.isAfter(clock.instant())||expira.isAfter(e.getPartidaEm())||expira.isAfter(clock.instant().plus(Duration.ofDays(30))))throw new IllegalArgumentException("Validade deve terminar antes da partida e em até 30 dias.");

@@ -21,7 +21,8 @@ public class ExcursaoService {
     private final Clock clock;
     private final ParadaExcursaoRepository paradas;
     private final InscricaoExcursaoRepository inscricoes;
-    public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock,ParadaExcursaoRepository paradas,InscricaoExcursaoRepository inscricoes){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;this.paradas=paradas;this.inscricoes=inscricoes;}
+    private final ExecucaoExcursaoRepository execucoes;
+    public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock,ParadaExcursaoRepository paradas,InscricaoExcursaoRepository inscricoes,ExecucaoExcursaoRepository execucoes){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;this.paradas=paradas;this.inscricoes=inscricoes;this.execucoes=execucoes;}
     private Usuario motorista(String uid){
         Usuario u=usuarios.findByFirebaseUid(uid).orElseThrow(()->new AccessDeniedException("Perfil não encontrado."));
         if(!"MOTORISTA".equals(u.getTipo()))throw new AccessDeniedException("Somente motoristas gerenciam excursões.");return u;
@@ -42,7 +43,7 @@ public class ExcursaoService {
         if(d.partidaEm()==null||!d.partidaEm().isAfter(clock.instant()))throw new IllegalArgumentException("Partida deve estar no futuro.");
         if(d.retornoEm()!=null&&!d.retornoEm().isAfter(d.partidaEm()))throw new IllegalArgumentException("Retorno deve ser posterior à partida.");
     }
-    private void editavel(Excursao e){if((e.getEstado()!=EstadoExcursao.RASCUNHO&&e.getEstado()!=EstadoExcursao.PUBLICADA)||!e.getPartidaEm().isAfter(clock.instant()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão encerrada ou já iniciada.");}
+    private void editavel(Excursao e){if((e.getEstado()!=EstadoExcursao.RASCUNHO&&e.getEstado()!=EstadoExcursao.PUBLICADA)||!e.getPartidaEm().isAfter(clock.instant())||execucoes.existsByExcursaoId(e.getId()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão encerrada ou já iniciada.");}
     private void versao(Excursao e,Long valor){if(valor==null||e.getVersao()!=valor)throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão mudou; atualize os dados antes de editar.");}
     @Transactional public ExcursaoDTO criar(String uid,ExcursaoRequest d){
         Usuario u=motorista(uid);validar(d);Excursao e=new Excursao();e.setOrganizador(u);e.setCriadaEm(clock.instant());e.configurar(d);return dto(excursoes.saveAndFlush(e));
@@ -64,7 +65,7 @@ public class ExcursaoService {
     }
     @Transactional public ExcursaoDTO cancelar(Long id,String uid){
         Excursao e=propria(id,uid,true);if(e.getEstado()==EstadoExcursao.CONCLUIDA)throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão concluída.");
-        e.setEstado(EstadoExcursao.CANCELADA);inscricoes.cancelarAtivas(id);return dto(excursoes.saveAndFlush(e));
+        e.setEstado(EstadoExcursao.CANCELADA);execucoes.cancelarAtivas(id,clock.instant());inscricoes.cancelarAtivas(id);return dto(excursoes.saveAndFlush(e));
     }
     @Transactional public ExcursaoDTO configurarColeta(Long id,String uid,ColetaExcursaoRequest d){
         Excursao e=propria(id,uid,true);editavel(e);

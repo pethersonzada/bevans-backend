@@ -18,14 +18,15 @@ public class InscricaoExcursaoService {
     private final ExcursaoRepository excursoes;private final InscricaoExcursaoRepository inscricoes;
     private final CredencialInscricaoExcursaoRepository credenciais;private final ParadaExcursaoRepository paradas;
     private final ConviteExcursaoService convites;private final ExcursaoService administracao;private final EntityManager em;private final Clock clock;
+    private final ExecucaoExcursaoRepository execucoes;
     public InscricaoExcursaoService(ExcursaoRepository e,InscricaoExcursaoRepository i,CredencialInscricaoExcursaoRepository c,
-            ParadaExcursaoRepository p,ConviteExcursaoService v,ExcursaoService a,EntityManager em,Clock clock){
-        excursoes=e;inscricoes=i;credenciais=c;paradas=p;convites=v;administracao=a;this.em=em;this.clock=clock;
+            ParadaExcursaoRepository p,ConviteExcursaoService v,ExcursaoService a,EntityManager em,Clock clock,ExecucaoExcursaoRepository execucoes){
+        excursoes=e;inscricoes=i;credenciais=c;paradas=p;convites=v;administracao=a;this.em=em;this.clock=clock;this.execucoes=execucoes;
     }
     private ResponseStatusException ausente(){return new ResponseStatusException(HttpStatus.NOT_FOUND,"Inscrição ou credencial indisponível.");}
     private ResponseStatusException conflito(String texto){return new ResponseStatusException(HttpStatus.CONFLICT,texto);}
     private Excursao lock(Long id){Excursao e=excursoes.lockById(id).orElseThrow(this::ausente);em.refresh(e,LockModeType.PESSIMISTIC_WRITE);return e;}
-    private void aberta(Excursao e){if(e.getEstado()!=EstadoExcursao.PUBLICADA||!e.getPartidaEm().isAfter(clock.instant()))throw conflito("Inscrições encerradas nesta excursão.");}
+    private void aberta(Excursao e){if(e.getEstado()!=EstadoExcursao.PUBLICADA||!e.getPartidaEm().isAfter(clock.instant())||execucoes.existsByExcursaoId(e.getId()))throw conflito("Inscrições encerradas nesta excursão.");}
     private CredencialInscricaoExcursao credencial(String token){
         String hash;try{hash=TokensExcursao.hash(token);}catch(IllegalArgumentException ex){throw ausente();}
         var c=credenciais.findByTokenHash(hash).orElseThrow(this::ausente);if(!c.getExpiraEm().isAfter(clock.instant()))throw ausente();return c;

@@ -14,12 +14,13 @@ import org.springframework.transaction.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 @DataJpaTest(properties={"spring.jpa.hibernate.ddl-auto=create-drop","spring.jpa.database-platform=org.hibernate.dialect.H2Dialect","spring.sql.init.mode=never"})
-@Import({ExcursaoService.class,ConviteExcursaoService.class,InscricaoExcursaoService.class,RoteiroExcursaoService.class,ConviteExcursaoIntegrationTest.Tempo.class})
+@Import({ExcursaoService.class,ConviteExcursaoService.class,InscricaoExcursaoService.class,RoteiroExcursaoService.class,ExecucaoExcursaoService.class,ConviteExcursaoIntegrationTest.Tempo.class})
 @Transactional(propagation=Propagation.NOT_SUPPORTED)
 class InscricaoExcursaoIntegrationTest {
     @Autowired ExcursaoService excursoes;@Autowired ConviteExcursaoService convites;@Autowired InscricaoExcursaoService service;
     @Autowired UsuarioRepository usuarios;@Autowired InscricaoExcursaoRepository inscricoes;@Autowired Clock clock;
     @Autowired RoteiroExcursaoService roteiros;
+    @Autowired ExecucaoExcursaoService execucoes;
     private record Cenario(Long id,String uid,ConviteEmitidoDTO convite){}
     @BeforeEach void tempo(){((ConviteExcursaoIntegrationTest.Relogio)clock).agora=Instant.parse("2030-01-01T12:00:00Z");}
     private String motorista(){String uid=UUID.randomUUID().toString();var u=new Usuario();u.setNome(uid);u.setTelefone(uid);u.setEmail(uid+"@test.invalid");u.setFirebaseUid(uid);u.setTipo("MOTORISTA");usuarios.save(u);return uid;}
@@ -144,5 +145,54 @@ class InscricaoExcursaoIntegrationTest {
         assertThrows(IllegalArgumentException.class,()->roteiros.planejamento(id,uid,"VOLTA",false));
         ((ConviteExcursaoIntegrationTest.Relogio)clock).agora=clock.instant().plusSeconds(3601);
         assertThrows(ResponseStatusException.class,()->roteiros.planejamento(id,uid,"IDA",false));
+    }
+    @Test void iniciarCongelaRoteiroInscricoesEEdicoesEFinalizarConcluiExcursao(){
+        var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);String token=chave(c);var i=service.solicitar(c.convite().token(),token,porta("Ana"));service.confirmar(c.id(),i.id(),c.uid());
+        String pendente=chave(c);service.solicitar(c.convite().token(),pendente,porta("Bia"));
+        var x=execucoes.iniciar(c.id(),c.uid(),"IDA",true);assertEquals(EstadoExecucaoExcursao.EM_ANDAMENTO,x.estado());
+        assertEquals(List.of(i.id()),x.pontos().stream().flatMap(p->p.participantes().stream()).map(PontoRoteiroExcursaoDTO.Participante::inscricaoId).toList());
+        assertEquals(x.id(),execucoes.iniciar(c.id(),c.uid(),"IDA",false).id());assertEquals(x.pontos(),execucoes.listar(c.id(),c.uid()).get(0).pontos());
+        assertThrows(ResponseStatusException.class,()->service.cancelar(token));
+        assertThrows(ResponseStatusException.class,()->service.emitirCredencial(c.convite().token()));
+        var e=excursoes.consultar(c.id(),c.uid());assertThrows(ResponseStatusException.class,()->excursoes.atualizar(c.id(),c.uid(),dados(e,20,e.partidaEm())));
+        assertThrows(ResponseStatusException.class,()->roteiros.planejamento(c.id(),c.uid(),"IDA",true));
+        assertEquals(EstadoExecucaoExcursao.FINALIZADA,execucoes.finalizar(c.id(),x.id(),c.uid()).estado());
+        assertEquals(EstadoExcursao.CONCLUIDA,excursoes.consultar(c.id(),c.uid()).estado());
+        assertEquals(x.id(),execucoes.finalizar(c.id(),x.id(),c.uid()).id());
+        assertThrows(ResponseStatusException.class,()->execucoes.iniciar(c.id(),c.uid(),"IDA",false));
+        assertThrows(AccessDeniedException.class,()->execucoes.listar(c.id(),motorista()));
+    }
+    @Test void idaEVoltaTemExecucoesDistintasComExtremosPreservados(){
+        var c=cenario(12,ModoColetaExcursao.PARADA_UNICA);var e=excursoes.consultar(c.id(),c.uid());
+        excursoes.atualizar(c.id(),c.uid(),new ExcursaoRequest(e.titulo(),e.destinoNome(),e.destinoLatitude(),e.destinoLongitude(),e.origemNome(),e.origemLatitude(),e.origemLongitude(),e.partidaEm(),e.partidaEm().plusSeconds(3600),12,e.versao()));
+        var i=service.solicitar(c.convite().token(),chave(c),parada("Ana",null));service.confirmar(c.id(),i.id(),c.uid());
+        assertThrows(ResponseStatusException.class,()->execucoes.iniciar(c.id(),c.uid(),"VOLTA",false));
+        var ida=execucoes.iniciar(c.id(),c.uid(),"IDA",false);
+        assertThrows(ResponseStatusException.class,()->execucoes.iniciar(c.id(),c.uid(),"VOLTA",false));execucoes.finalizar(c.id(),ida.id(),c.uid());
+        assertEquals(EstadoExcursao.PUBLICADA,excursoes.consultar(c.id(),c.uid()).estado());
+        var volta=execucoes.iniciar(c.id(),c.uid(),"VOLTA",false);assertNotEquals(ida.id(),volta.id());
+        assertEquals("Destino",volta.pontos().get(0).nome());assertEquals("Origem",volta.pontos().get(volta.pontos().size()-1).nome());
+        execucoes.finalizar(c.id(),volta.id(),c.uid());assertEquals(EstadoExcursao.CONCLUIDA,excursoes.consultar(c.id(),c.uid()).estado());
+    }
+    @Test void iniciosSimultaneosRetornamUmaUnicaExecucaoPersistida() throws Exception {
+        var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);var inicio=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);
+        try{
+            Callable<Long> acao=()->{inicio.await();return execucoes.iniciar(c.id(),c.uid(),"IDA",false).id();};
+            var a=pool.submit(acao);var b=pool.submit(acao);inicio.countDown();assertEquals(a.get(15,TimeUnit.SECONDS),b.get(15,TimeUnit.SECONDS));assertEquals(1,execucoes.listar(c.id(),c.uid()).size());
+        }finally{inicio.countDown();pool.shutdownNow();}
+    }
+    @Test void cancelarExcursaoCancelaExecucaoSemApagarSnapshot(){
+        var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);var x=execucoes.iniciar(c.id(),c.uid(),"IDA",false);
+        var outro=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);
+        assertThrows(AccessDeniedException.class,()->execucoes.iniciar(c.id(),outro.uid(),"IDA",false));
+        assertEquals(404,assertThrows(ResponseStatusException.class,()->execucoes.finalizar(outro.id(),x.id(),outro.uid())).getStatusCode().value());
+        excursoes.cancelar(c.id(),c.uid());
+        var salva=execucoes.listar(c.id(),c.uid()).get(0);assertEquals(EstadoExecucaoExcursao.CANCELADA,salva.estado());assertEquals(x.pontos(),salva.pontos());
+        assertThrows(ResponseStatusException.class,()->execucoes.finalizar(c.id(),x.id(),c.uid()));
+    }
+    @Test void inicioComAtrasoNaoDependeDaPreviaAntesDoHorario(){
+        var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);((ConviteExcursaoIntegrationTest.Relogio)clock).agora=clock.instant().plusSeconds(86500);
+        assertThrows(ResponseStatusException.class,()->roteiros.planejamento(c.id(),c.uid(),"IDA",false));
+        assertEquals(EstadoExecucaoExcursao.EM_ANDAMENTO,execucoes.iniciar(c.id(),c.uid(),"IDA",false).estado());
     }
 }

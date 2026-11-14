@@ -29,7 +29,7 @@ class UpgradeMainSchemaPostgresIT {
                 assertEquals("23505",assertThrows(SQLException.class,()->s.execute("insert into viagem(id,turma_id,sentido,status) values(21,7,'VOLTA','EM_ANDAMENTO')")).getSQLState());
             }
             try(var paths=Files.list(Path.of("docs/migrations"))){
-                var scripts=paths.filter(p->p.toString().endsWith(".sql")).sorted().toList();assertEquals(11,scripts.size());
+                var scripts=paths.filter(p->p.toString().endsWith(".sql")).sorted().toList();assertEquals(12,scripts.size());
                 for(Path script:scripts)ScriptUtils.executeSqlScript(c,new FileSystemResource(script));
             }
             try(var s=c.createStatement();var rs=s.executeQuery("select t.id,t.capacidade,a.id,v.id,v.iniciada_em from turmas t join aluno_turma a on a.turma_id=t.id join viagem v on v.turma_id=t.id")){
@@ -42,6 +42,10 @@ class UpgradeMainSchemaPostgresIT {
                 s.executeUpdate(inserir.formatted(88));assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(inserir.formatted(89))).getSQLState());
                 s.executeUpdate("update inscricoes_excursao set estado='CANCELADA' where excursao_id=99");assertEquals(1,s.executeUpdate(inserir.formatted(89)));
                 assertEquals("23514",assertThrows(SQLException.class,()->s.executeUpdate("update inscricoes_excursao set latitude=91 where excursao_id=99")).getSQLState());
+                String execucao="insert into execucoes_excursao(excursao_id,sentido,estado,iniciada_em,roteiro_json) values(99,'%s','EM_ANDAMENTO',CURRENT_TIMESTAMP,'[]')";
+                s.executeUpdate(execucao.formatted("IDA"));assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(execucao.formatted("VOLTA"))).getSQLState());
+                s.executeUpdate("update execucoes_excursao set estado='FINALIZADA' where excursao_id=99");assertEquals(1,s.executeUpdate(execucao.formatted("VOLTA")));
+                assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(execucao.formatted("IDA"))).getSQLState());
             }
         }
         var factory=new LocalContainerEntityManagerFactoryBean();

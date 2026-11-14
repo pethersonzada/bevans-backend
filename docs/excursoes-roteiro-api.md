@@ -32,11 +32,11 @@ sentido pedido. Cancelada, concluída ou após a partida desse sentido retorna
 409. IDA/VOLTA inválido ou volta/origem ausente recebe 400. Falha de otimização
 retorna erro tratado pelo otimizador; não devolve sucesso com ordem inventada.
 
-Este incremento é uma prévia real calculada no backend, não execução persistida:
-início/encerramento operacional com snapshot imutável, controle compartilhado
-de embarque/desembarque #46 e notificações #47 continuam pendentes. Não alterar
-o rastreamento escolar existente ou criar GPS público de Excursões. Não há nova
-migração nesta etapa; utiliza as inscrições/paradas persistidas por 009–011.
+Início/encerramento com snapshot persistido foi acrescentado no incremento 012;
+consultar `excursoes-execucao-api.md`. Prévia de sentido já executado recebe 409
+e não altera o snapshot. Controle compartilhado de embarque/desembarque #46 e
+notificações #47 continuam pendentes. Não há GPS público de Excursões. A prévia
+em si utiliza inscrições/paradas persistidas por 009–011, sem tabela paralela.
 
 Testes exercitam OR-Tools nativo nos três modos, exclusão de pendentes,
 privacidade, isolamento entre motoristas, sequência fixa/volta, extremos e

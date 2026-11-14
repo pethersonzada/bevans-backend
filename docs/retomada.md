@@ -1,4 +1,171 @@
-# Estado de retomada — 13/11/2026
+# Estado de retomada — 14/11/2026
+
+## Estado vigente — coleta privada, controle operacional, notificações e GPS
+
+Continuado o pedido anexado a partir de `e3665c0`, na **main** limpa. Executados
+status/branch/log/fetch; comparação inicial: seis commits à frente e zero atrás
+de `origin/main` (`415152e`). Não foi necessário pull. Os seis commits anteriores
+`e1b5796`, `6518f0a`, `3eded6f`, `45f0281`, `26740d0`, `e3665c0` foram preservados.
+Sem rebase/reset/clean, troca de branch, push, deploy ou acesso à produção.
+Escopo de escrita limitado ao backend; nenhum frontend criado ou alterado.
+
+### Commits desta execução
+
+| Commit | Incremento |
+|---|---|
+| `bf4e1b9` | Coleta privada por turma/sentido, modos e paradas, sugestão Haversine e escolha persistida (#48) |
+| `bed0568` | Controle operacional comum, embarque/desembarque, correções e auditoria (#46) |
+| `bf0a8e4` | Central, outbox, preferências, dispositivos e adaptador FCM (#47) |
+| `04b4f8a` | GPS autorizado de execuções de excursão com regras e SSE compartilhados (#31/#41) |
+| `9ad82df` | Proximidade com GPS recente, ordem operacional e resumos do motorista (#47/#41) |
+| `41a3b8d` | Alterações/cancelamentos, revalidação de destinatários e recuperação/retries da fila (#47/#46) |
+
+O commit final desta retomada contém apenas documentação/índice de contratos.
+Após ele, main fica **13 commits à frente e zero atrás da referência origin/main
+consultada nesta execução**, com árvore limpa. Nenhuma issue foi fechada: aceite
+mobile/FCM e políticas externas continuam pendentes. Comentários de progresso
+foram publicados diretamente nas issues correspondentes.
+
+### Funcionalidades e contratos
+
+- #48: `ColetaPrivada`, `ParadaPrivada`, `EscolhaParadaPrivada`; configuração só
+  do motorista, escolha própria/aprovada, IDs isolados, IDA/VOLTA independentes,
+  restrições de paradas utilizadas e planejamento/viagem ativa. O modo antigo
+  permanece PORTA_A_PORTA por ausência de configuração, sem backfill automático.
+  Rota em paradas usa a escolha efetiva, sem residência. Endereços anteriores
+  não são apagados quando omitidos na confirmação. Contrato: `turmas-coleta-api.md`.
+- #46: `OperacaoViagem`, `RegistroOperacional`, `EventoOperacional`; mesma API
+  para turmas, públicas FIXA/FLEXÍVEL e excursões, sem criar AlunoTurma para
+  excursionistas. Snapshot esperado criado atomicamente no início; contadores
+  persistidos, transições idempotentes, versão para impedir replay e correções
+  auditadas pelo motorista. Finalização/cancelamento recusam EMBARCADOS.
+  Contrato: `controle-operacional-api.md`.
+- #47: `Notificacao`, `OutboxNotificacao`, `EntregaPush`, preferências e
+  dispositivos. Evento/outbox na transação original, consumo posterior com
+  reserva/retry/deduplicação; notificações e entregas criadas atomicamente.
+  Firebase Admin existente, sem novas credenciais/dependências. Tokens rotacionados
+  não são revogados por retorno tardio do token anterior. Preferência desativada
+  conserva o histórico. Feed Firebase isolado e feed de inscrição por X-Inscricao.
+  Contrato: `notificacoes-api.md`.
+- Proximidade: amostra nova válida, precisão <=50 m, TTL 30 s, próxima ordem
+  AGUARDANDO autorizada. Raios conservadores de 500/200/50 m, sem ETA, sem embarque
+  automático, uma ocorrência por operação/registro/tipo. Revalida fila e push;
+  GPS expirado, estado/ordem/faixa inválidos descartam o alerta. Resumos de
+  aguardando/todos embarcaram ao motorista. Contrato: `proximidade-api.md`.
+- GPS de excursão: `PosicaoExcursaoService`, `PosicaoExecucaoExcursao`,
+  `RegrasGps`/`AmostraGps` compartilhados com viagens; mesmo PosicaoStreamService,
+  limites de canais/expiração/revalidação. Apenas organizador envia; credencial
+  individual válida + inscrição confirmada no snapshot consulta. Convite público
+  não autoriza GPS. Encerramento limpa posição sob lock da excursão.
+  Contrato: `excursoes-gps-api.md`.
+- Cancelamento privado/público: `PUT /viagens/{id}/cancelamento`, Firebase do
+  motorista, idempotência, bloqueio de pessoas embarcadas e limpeza GPS atômica.
+  Alterações efetivas de horário/percurso geram avisos próprios; salvar sem mudar
+  não gera novos avisos. Excursões preservam o bloqueio de alterações com reservas
+  e inscrições ativas. Notificações usam contexto `EXECUCAO_EXCURSAO` para execução
+  e `EXCURSAO` para excursão, evitando colisão de IDs antes/depois da partida.
+
+### Migrações e validação real
+
+Scripts **001–012 intactos**. Novos scripts incrementais:
+
+1. `013-coleta-privada.sql`: modos, paradas e escolhas, sem modificar turmas antigas.
+2. `014-controle-operacional.sql`: origem exclusiva, registros e histórico versionado.
+3. `015-notificacoes.sql`: central, outbox, dispositivos, preferências e entregas.
+4. `016-gps-excursoes.sql`: última amostra por execução, FK e constraints.
+
+Preservado `Hibernate validate` como padrão da aplicação. `UpgradeMainSchemaPostgresIT`
+aplica fixture da main com dados e todos os 16 scripts; `OperacaoPostgresIT` também
+cria schema aleatório migrado antes do contexto e usa validate. Os antigos fixtures
+de serviços isolados foram preservados. Nada executado em produção. Recuperação:
+desativar recursos novos e preservar tabelas, IDs, snapshots, outbox/histórico;
+nunca usar DROP/recriação como rollback. Ver planos nos respectivos contratos.
+
+| Verificação | Resultado |
+|---|---|
+| Baseline reexecutada desta sessão | 246 testes padrão aprovados |
+| Após #48 | 255 padrão / 86 PostgreSQL aprovados |
+| Após #46 | 265 padrão / 94 PostgreSQL aprovados |
+| Central inicial | 269 padrão / 96 PostgreSQL aprovados |
+| GPS de excursão | 275 padrão / 97 PostgreSQL aprovados |
+| Proximidade | 276 padrão / 98 PostgreSQL aprovados |
+| **Final no JDK 21.0.12.1** | **282 padrão / 103 PostgreSQL aprovados**, zero falhas/erros/ignorados |
+
+Comparação com o estado anterior: +36 testes padrão e +25 execuções PostgreSQL
+sobre 246/78. Nenhum teste anterior removido/desabilitado. Cobertura inclui
+autorizações/isolamento, concorrência, persistência, transições/correções, sentidos,
+OR-Tools, GPS/TTL, migrações, leitura, tokens, preferências, outbox após rollback,
+reserva vencida, dois consumidores, cinco tentativas e adaptador FCM indisponível.
+Reconsulta em novas transações foi testada; não afirmar reinício real de dispositivo.
+
+Logs locais ignorados:
+
+- `.validation-logs/restantes-baseline.log`;
+- `.validation-logs/coleta-privada-clean-verify.log`, `coleta-privada-postgres.log`;
+- `.validation-logs/operacao-clean-verify.log`, `operacao-postgres.log`;
+- `.validation-logs/notificacoes-clean-verify.log`, `notificacoes-postgres.log`;
+- `.validation-logs/gps-excursoes-clean-verify.log`, `gps-excursoes-postgres.log`;
+- `.validation-logs/proximidade-clean-verify.log`, `proximidade-postgres.log`;
+- **`.validation-logs/final-java21-clean-verify.log`**;
+- **`.validation-logs/final-java21-postgres-reexecutado.log`**.
+
+As primeiras suítes usaram JDK 26 com opção ByteBuddy experimental; os resultados
+finais acima foram repetidos no **JDK 21 instalado**, sem essa opção. Usado Maven
+3.9.14 do cache do wrapper com `-o` e repositório local Maven do usuário.
+
+Comandos finais, após preparar os schemas locais conforme a CI:
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Java\jdk-21.0.12.1'
+$mavenLocal=rg --files "$env:USERPROFILE\.m2\wrapper\dists\apache-maven-3.9.14" -g mvn.cmd | Select-Object -First 1
+& $mavenLocal -o "-Dmaven.repo.local=$env:USERPROFILE\.m2\repository" clean verify
+& $mavenLocal -o "-Dmaven.repo.local=$env:USERPROFILE\.m2\repository" -Ppostgres-validation verify
+```
+
+Houve falha de infraestrutura durante a primeira execução PG no JDK 21: Docker
+Desktop deixou de responder e a conexão local foi recusada. Log preservado em
+`.validation-logs/final-java21-postgres.log` (100 erros de conexão, não aprovação).
+Engine restabelecido, container descartável recriado, schemas preparados e suíte
+inteira repetida com sucesso. Container final de teste:
+`742d74a7ed90fbe239f14e0a41545c2d085e547fe54cd1065c2c1a908899b8c6`,
+nome `bevans-restantes-validation`, PostgreSQL 16, bind apenas 127.0.0.1:55435.
+Encerrado ao concluir, após conferir identidade; Docker Desktop mantido.
+
+No perfil Maven postgres-validation, pools de teste limitados a quatro conexões,
+idle mínimo um e cache de quatro contextos para não exaurir o PG com novos
+contextos. Não foram alterados pools/configurações de produção. CI preservada:
+push main, pull_request e workflow_dispatch, Java 21/PostgreSQL 16, schema privado
+adicionado. CI remota não executada, pois não houve push.
+
+`git diff --check` aprovado. BackendBoundaryTest aprovado, inclusive inspeção de
+target. Nenhum frontend/JS/TS/Expo/Next, token real, credencial ou script auxiliar
+temporário identificado nos arquivos versionados. Target contém só artefatos de
+build Maven e permanece ignorado; logs não serão versionados.
+
+### Pendências reais e próximo passo
+
+Backend entregue localmente e testado; não declarar aceite global/produção.
+O próximo trabalho exige integração externa que esta sessão não pode simular:
+
+1. Revisar commits/contratos e autorizar eventual push. Nenhum envio foi feito.
+2. Integrar o aplicativo no repositório correto, fora deste escopo de escrita;
+   validar mapas, reconexão, permissões, logout e segundo plano em aparelhos.
+3. Validar FCM Android/iOS em pelo menos dois aparelhos com ambiente/consentimento
+   apropriados. **Não houve envio FCM real nem prova de recebimento.** Consumidor
+   `app.notifications.worker.enabled` e envio `app.push.enabled` exigem ativação
+   explícita e permanecem desativados por padrão.
+4. Definir/validar política de menores e responsáveis, retenção e consentimento
+   com o produto. Não presumir que Firebase ou aceite genérico resolve essa regra.
+5. Validar end-to-end os critérios remanescentes de #48/#46/#47/#41/#31 e somente
+   então considerar fechamento. Participantes sem aplicativo têm feed individual;
+   canal externo adicional exige consentimento e infraestrutura próprios.
+
+Não retomar a auditoria do zero nem refazer as seis entregas anteriores de Excursões.
+Para repetir PG, seguir CI/contratos e recriar apenas ambiente descartável local.
+
+---
+
+## Histórico da execução anterior — 13/11/2026
 
 ## Estado vigente — implementação na main em 13/11/2026
 

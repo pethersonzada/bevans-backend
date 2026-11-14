@@ -41,8 +41,9 @@ Migração incremental 012 após 011, sem alterar os scripts anteriores. JSON v1
 snapshot exige migração/decoder compatível. Roteiro corrompido/versão desconhecida
 retorna erro tratado 503. Não remover snapshots como rollback da aplicação.
 
-Esta etapa não implementa embarque físico nem prova de desembarque: isso é o
-domínio compartilhado #46. Finalização atual é ação explícita do motorista; não
-verifica pessoas ainda na van até #46 existir. Não há rastreamento de Excursões
-ou notificações automáticas nesta etapa. Reutilizar infraestrutura GPS com
-autorização própria na integração futura, sem expor GPS por convite/credencial.
+Atualização de 14/11: o [domínio compartilhado #46](controle-operacional-api.md)
+agora registra embarque/desembarque e bloqueia finalização/cancelamento enquanto
+houver pessoas EMBARCADAS. Há [GPS por execução](excursoes-gps-api.md), com
+credencial individual válida e inscrição incluída no snapshot, e
+[notificações persistidas](notificacoes-api.md). Convite público não libera GPS.
+Essas integrações preservam a execução/snapshot da migração 012.

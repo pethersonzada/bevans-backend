@@ -1,4 +1,27 @@
-# Auditoria e execução — 13/11/2026
+# Auditoria e execução — 14/11/2026
+
+## Atualização vigente — implementação incremental, sem nova auditoria
+
+Continuado a partir da main `e3665c0`, preservando os seis commits locais de
+Excursões. Baseline reexecutada: 246 testes padrão aprovados. Implementados #48
+(coleta privada por sentido), #46 (controle operacional comum) e backend de #47
+(central/outbox/FCM testável, dispositivos/preferências, alertas e eventos de
+configuração/cancelamento). GPS de Excursões integrado às regras/SSE existentes.
+
+Código final deste incremento em `41a3b8d`; commits anteriores desta sessão:
+`bf4e1b9`, `bed0568`, `bf0a8e4`, `04b4f8a`, `9ad82df`. Migrações 013–016 criadas;
+001–012 preservadas. Final **Java 21.0.12.1: 282 testes padrão e 103 execuções
+PostgreSQL 16 aprovadas**, zero falhas/erros/ignorados. Upgrade completo de schema
+com dados e Hibernate validate verificado. Nenhum teste removido/desabilitado.
+
+Falha transitória do Docker registrada separadamente; ambiente descartável
+recriado e suíte PG completa reexecutada com sucesso. Não se contou essa tentativa
+falha como aprovação. Nenhum banco de produção, push, deploy ou frontend alterado.
+FCM real, aparelhos Android/iOS, segundo plano e política específica de menores
+continuam sem validação externa; issues permanecem abertas.
+
+O [estado exato e evidências](retomada.md) contém comandos/ambiente, logs,
+contratos novos, commits e próximo passo. Seções seguintes são histórico.
 
 ## Atualização vigente — main 415152e e incrementos posteriores
 

@@ -83,6 +83,11 @@ MAPBOX_SECRET_TOKEN=sk.xxxxxxxxxxxx
 - [Inscrições e vagas](docs/excursoes-inscricoes-api.md)
 - [Roteirização de Excursões](docs/excursoes-roteiro-api.md)
 - [Execução persistida](docs/excursoes-execucao-api.md)
+- [Coleta e paradas de turmas privadas](docs/turmas-coleta-api.md)
+- [Controle compartilhado de embarque e desembarque](docs/controle-operacional-api.md)
+- [Central de notificações e dispositivos](docs/notificacoes-api.md)
+- [GPS de execuções de excursões](docs/excursoes-gps-api.md)
+- [Alertas de proximidade e resumos operacionais](docs/proximidade-api.md)
 
 O cadastro de turma aceita rascunho sem percurso e exige `capacidade` inteira
 positiva. Origem/destino são confirmados por coordenadas no mapa, em PUTs

@@ -32,7 +32,19 @@ Ativar explicitamente o consumidor com `app.notifications.worker.enabled=true`; 
 
 Push usa somente mensagem genérica e `notificacaoId`: sem nomes, coordenadas, endereços ou credenciais. Vínculo e preferência são revalidados antes de reservar a entrega. Revogação não cancela um envio externo que já esteja em andamento. A entrega externa tem semântica de pelo menos uma tentativa: uma falha após o FCM aceitar o envio pode gerar repetição; o cliente deve deduplicar por `notificacaoId`. Nunca marcar como entregue sem a confirmação do adaptador.
 
-Implementados: ciclo de viagem/execução, embarque/desembarque/correções, aprovação/recusa de vaga e de embarque público, nova inscrição e confirmação de excursão. Eventos de alteração de horário/trajeto, alertas de proximidade e agregados do motorista serão registrados em incrementos posteriores; a issue continua aberta.
+Implementados: ciclo de viagem/execução, embarque/desembarque/correções, aprovação/recusa de vaga e de embarque público, nova solicitação ao motorista, nova inscrição, confirmação e cancelamento de inscrição em excursão. Mudanças efetivas de turno/percurso de turma, configuração de coleta privada e horários/paradas de rota pública geram avisos aos vínculos aprovados. Repetir configuração sem mudança não cria aviso. O consumidor e o envio revalidam destinatário/contexto; desligados não recebem novos avisos da configuração antiga.
+
+Excursões com inscrições reservadas/confirmadas já bloqueiam alterações de horários/percurso/coleta: essas regras foram preservadas, sem inventar alterações inseguras para produzir notificação. Cancelamento antes da partida avisa inscrições ativas por credencial; execução já iniciada usa o ciclo operacional comum, sem duplicar avisos de cancelamento dos confirmados.
+
+Os [alertas de proximidade e resumos](proximidade-api.md) usam a mesma outbox e central. A issue #47 continua aberta para aceite externo Android/iOS e políticas de consentimento, não por ausência desses contratos locais.
+
+### Contextos para navegação
+
+`VIAGEM` e `EXECUCAO_EXCURSAO` dos eventos operacionais usam o ID da viagem/execução. Eventos anteriores à execução usam `TURMA` (turma), `ROTA_PUBLICA` (publicação), `SOLICITACAO_VAGA` (vínculo), `EMBARQUE` (solicitação) ou `EXCURSAO` (excursão). Isso distingue cancelamento antes da partida e cancelamento de execução sem colisão de IDs. O domínio operacional continua usando `tipo=EXCURSAO` em `/operacoes/EXCURSAO/{execucaoId}`; `contextoTipo` da central é a chave de navegação. O servidor valida novamente o recurso de destino ao consultá-lo.
+
+### Cancelamento seguro de viagem
+
+`PUT /viagens/{viagemId}/cancelamento`, com Firebase do motorista responsável, cancela turmas privadas e viagens de rotas públicas. Retorno 200; repetição é idempotente. Outra pessoa recebe 403, inexistente 404 e finalizada 409. Pessoas EMBARCADAS impedem o cancelamento: confirmar desembarque real ou correção auditada antes de encerrar. O mesmo lock de turma protege GPS/estado; posição é limpa e o evento `VIAGEM_CANCELADA` entra na outbox na mesma transação. Nova posição recebe 409. Para excursão, preservar `PUT /excursoes/{id}/cancelamento`.
 
 ## Recuperação
 

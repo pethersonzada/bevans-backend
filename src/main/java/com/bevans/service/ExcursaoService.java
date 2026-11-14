@@ -66,10 +66,16 @@ public class ExcursaoService {
     }
     @Transactional public ExcursaoDTO cancelar(Long id,String uid){
         Excursao e=propria(id,uid,true);if(e.getEstado()==EstadoExcursao.CONCLUIDA)throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão concluída.");
+        if(e.getEstado()==EstadoExcursao.CANCELADA)return dto(e);
         var ativas=execucoes.findByExcursaoIdOrderByIdAsc(id).stream().filter(x->x.getEstado()==EstadoExecucaoExcursao.EM_ANDAMENTO).map(ExecucaoExcursao::getId).toList();
+        var avisar=new java.util.ArrayList<>(inscricoes.findByExcursaoIdAndEstadoOrderByIdAsc(id,StatusInscricaoExcursao.SOLICITADA));
+        if(ativas.isEmpty())avisar.addAll(inscricoes.findByExcursaoIdAndEstadoOrderByIdAsc(id,StatusInscricaoExcursao.CONFIRMADA));
         if(publisher!=null)ativas.forEach(x->publisher.publishEvent(new EventosDeViagem.Excursao("VALIDAR_FIM",x)));
         e.setEstado(EstadoExcursao.CANCELADA);execucoes.cancelarAtivas(id,clock.instant());inscricoes.cancelarAtivas(id);excursoes.saveAndFlush(e);
-        if(publisher!=null)ativas.forEach(x->publisher.publishEvent(new EventosDeViagem.Excursao("CANCELADA",x)));return dto(e);
+        if(publisher!=null){
+            ativas.forEach(x->publisher.publishEvent(new EventosDeViagem.Excursao("CANCELADA",x)));
+            avisar.forEach(i->publisher.publishEvent(new EventosDeViagem.Direto("VIAGEM_CANCELADA","EXCURSAO",id,null,i.getId(),"EXCURSAO:"+id+":CANCELADA:"+i.getId())));
+        }return dto(e);
     }
     @Transactional public ExcursaoDTO configurarColeta(Long id,String uid,ColetaExcursaoRequest d){
         Excursao e=propria(id,uid,true);editavel(e);

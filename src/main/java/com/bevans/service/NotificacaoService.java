@@ -28,12 +28,14 @@ public class NotificacaoService {
     private final PreferenciaNotificacaoRepository preferencias;
     private final EntregaPushRepository entregas;
     private final ContextoProximidadeService proximidade;
+    private final AutorizacaoNotificacaoService autorizacao;
     public NotificacaoService(NotificacaoRepository n,OutboxNotificacaoRepository o,OperacaoViagemRepository op,
             RegistroOperacionalRepository r,UsuarioRepository u,AlunoTurmaRepository v,EntityManager em,Clock clock,
-            DispositivoNotificacaoRepository dispositivos,PreferenciaNotificacaoRepository preferencias,EntregaPushRepository entregas,ContextoProximidadeService proximidade){
+            DispositivoNotificacaoRepository dispositivos,PreferenciaNotificacaoRepository preferencias,EntregaPushRepository entregas,ContextoProximidadeService proximidade,AutorizacaoNotificacaoService autorizacao){
         notificacoes=n;outbox=o;operacoes=op;registros=r;usuarios=u;vinculos=v;this.em=em;this.clock=clock;
         this.dispositivos=dispositivos;this.preferencias=preferencias;this.entregas=entregas;
         this.proximidade=proximidade;
+        this.autorizacao=autorizacao;
     }
     @EventListener @Transactional
     public void registrar(EventosDeViagem.Operacao evento){
@@ -66,7 +68,10 @@ public class NotificacaoService {
         Instant agora=clock.instant();
         OutboxNotificacao evento=outbox.lockById(eventoId).orElseThrow();em.refresh(evento);
         if(!"PROCESSANDO".equals(evento.estado))return;
-        if(evento.operacaoId==null){salvar(evento,null,evento.usuarioId,evento.inscricaoId,agora);evento.estado="PROCESSADA";return;}
+        if(evento.operacaoId==null){
+            if(!autorizacao.direto(evento.contextoTipo,evento.contextoId,evento.tipo,evento.usuarioId,evento.inscricaoId)){evento.estado="DESCARTADA";return;}
+            salvar(evento,null,evento.usuarioId,evento.inscricaoId,agora);evento.estado="PROCESSADA";return;
+        }
         if(ContextoProximidadeService.TIPOS.contains(evento.tipo)&&!proximidade.valido(evento.operacaoId,evento.registroId,evento.tipo,evento.criadaEm)){evento.estado="DESCARTADA";return;}
         OperacaoViagem op=operacoes.findById(evento.operacaoId).orElseThrow();
         if(evento.usuarioId!=null){salvar(evento,op,evento.usuarioId,null,agora);evento.estado="PROCESSADA";return;}
@@ -93,7 +98,7 @@ public class NotificacaoService {
         String chave=e.chave+(usuario!=null?":U:"+usuario:":I:"+inscricao);
         if(notificacoes.existsByChave(chave))return;
         Notificacao n=new Notificacao();n.chave=chave;n.tipo=e.tipo;n.usuarioId=usuario;n.inscricaoId=inscricao;
-        n.operacaoId=op==null?null:op.id;n.registroId=e.registroId;n.contextoTipo=op==null?e.contextoTipo:op.tipo.name();n.contextoId=op==null?e.contextoId:op.referenciaId;
+        n.operacaoId=op==null?null:op.id;n.registroId=e.registroId;n.contextoTipo=op==null?e.contextoTipo:op.tipo==TipoOperacao.EXCURSAO?"EXECUCAO_EXCURSAO":op.tipo.name();n.contextoId=op==null?e.contextoId:op.referenciaId;
         n.titulo="Atualização da viagem";n.mensagem=mensagem(e.tipo);n.criadaEm=e.criadaEm;notificacoes.save(n);
         if(usuario!=null&&preferencias.findById(usuario).map(p->p.pushOperacional).orElse(true)){
             for(var dispositivo:dispositivos.findByUsuarioIdAndAtivoTrue(usuario)){
@@ -113,6 +118,9 @@ public class NotificacaoService {
         case "NOVA_INSCRICAO"->"Uma nova inscrição aguarda análise.";
         case "INSCRICAO_CONFIRMADA"->"Sua inscrição foi confirmada.";
         case "INSCRICAO_CANCELADA"->"Uma inscrição foi cancelada.";
+        case "NOVA_SOLICITACAO"->"Uma nova solicitação aguarda análise.";
+        case "HORARIO_ALTERADO"->"O horário foi alterado. Consulte os detalhes atualizados.";
+        case "TRAJETO_ALTERADO"->"O trajeto foi alterado. Consulte os detalhes atualizados.";
         case "PASSAGEIROS_AGUARDANDO"->"Existem passageiros aguardando embarque.";
         case "TODOS_EMBARCARAM"->"Todos os passageiros esperados tiveram embarque confirmado.";
         case "VAN_APROXIMANDO"->"A van está próxima do seu ponto. Consulte o acompanhamento autorizado.";

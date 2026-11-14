@@ -40,6 +40,7 @@ class OperacaoIntegrationTest {
     @Autowired PosicaoExcursaoService gpsExcursao;@Autowired PosicaoExecucaoExcursaoRepository posicoesExcursao;
     @Autowired CredencialInscricaoExcursaoRepository credenciaisInscricao;
     @Autowired PosicaoViagemService gpsViagem;@Autowired ContextoProximidadeService contextoProximidade;
+    @Autowired CancelamentoViagemService cancelamentoViagem;@Autowired TurmaService turmaService;
     private record Cenario(Turma turma,Usuario dono,Usuario aluno){}
     private Usuario usuario(String tipo){String id=UUID.randomUUID().toString();var u=new Usuario();u.setNome(id);u.setTelefone(id);u.setEmail(id+"@test.invalid");u.setFirebaseUid(id);u.setTipo(tipo);return usuarios.save(u);}
     private Cenario cenario(){
@@ -80,6 +81,9 @@ class OperacaoIntegrationTest {
         distribuir();var pedido=pushes.reservar();assertNotNull(pedido);
         assertFalse(pedido.toString().contains(token));
         assertEquals(PushGateway.Resultado.INDISPONIVEL,new FirebasePushGateway(false).enviar(token,pedido.notificacao(),pedido.titulo(),pedido.mensagem()));
+        dispositivos.registrar(c.aluno().getFirebaseUid(),new NotificacaoDTO.Dispositivo(instalacao,token+"-rotacao",true));
+        pushes.concluir(pedido,PushGateway.Resultado.TOKEN_INVALIDO);assertTrue(dispositivoRepo.findById(dispositivo.id()).orElseThrow().ativo);
+        pedido=pushes.reservar();assertNotNull(pedido);assertEquals(token+"-rotacao",pedido.token());
         pushes.concluir(pedido,PushGateway.Resultado.TOKEN_INVALIDO);
         assertFalse(dispositivoRepo.findById(dispositivo.id()).orElseThrow().ativo);
         assertEquals("FALHA",entregaRepo.findById(pedido.entrega()).orElseThrow().estado);
@@ -135,6 +139,7 @@ class OperacaoIntegrationTest {
         assertTrue(posicoesExcursao.findById(x.id()).isPresent());
         assertThrows(ResponseStatusException.class,()->service.minhaWeb(x.id(),convite.token()));
         distribuir();assertEquals(3,avisosWeb.listar(token,0,20).getTotalElements());
+        assertTrue(avisosWeb.listar(token,0,20).stream().anyMatch(n->n.tipo().equals("VIAGEM_INICIADA")&&n.contextoTipo().equals("EXECUCAO_EXCURSAO")&&n.contextoId().equals(x.id())));
         assertThrows(ResponseStatusException.class,()->avisosWeb.listar(convite.token(),0,20));
         var aviso=avisosWeb.listar(token,0,20).getContent().getFirst();avisosWeb.ler(token,aviso.id());assertNotNull(avisosWeb.listar(token,0,20).getContent().getFirst().lidaEm());
         r=service.alterarDono(TipoOperacao.EXCURSAO,x.id(),r.id(),dono.getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
@@ -155,6 +160,9 @@ class OperacaoIntegrationTest {
             gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("publica",-8.1,-35.1,clock.instant(),5.0,null));distribuir();
             assertTrue(notificacoes.listar(c.aluno().getFirebaseUid(),0,20).stream().anyMatch(n->n.tipo().equals("VAN_CHEGOU")));
             assertTrue(notificacoes.listar(pendente.getFirebaseUid(),0,20).isEmpty());
+            cancelamentoViagem.cancelar(id,c.dono().getFirebaseUid());cancelamentoViagem.cancelar(id,c.dono().getFirebaseUid());distribuir();
+            assertEquals(1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).stream().filter(n->n.tipo().equals("VIAGEM_CANCELADA")).count());
+            assertNull(gpsViagem.consultar(id,c.aluno().getFirebaseUid()).latitude());
         }
     }
     @Test void cancelamentoLimpaGpsEInscricaoAusenteOuExpiradaNaoPodeRastrear()throws Exception{
@@ -171,6 +179,60 @@ class OperacaoIntegrationTest {
         assertThrows(ResponseStatusException.class,()->gpsExcursao.consultarParticipante(x.id(),token));
         excursoes.cancelar(e.id(),dono.getFirebaseUid());
         assertNull(posicoesExcursao.findById(x.id()).orElseThrow().getLatitude());assertEquals("FINALIZADA",gpsExcursao.consultar(x.id(),dono.getFirebaseUid()).estado());
+        distribuir();assertTrue(notificacaoRepo.findByInscricaoId(i.id(),org.springframework.data.domain.PageRequest.of(0,50)).stream().anyMatch(n->n.tipo.equals("VIAGEM_CANCELADA")));
+    }
+    @Test void alteracoesReaisNotificamSomenteVinculosAtuaisECancelamentoExigeDonoESaidaDaVan(){
+        var c=cenario();var ausente=usuario("PASSAGEIRO");var v=new AlunoTurma();v.setTurma(c.turma());v.setAluno(ausente);v.setStatus("REMOVIDO");vinculos.save(v);
+        var dispositivo=dispositivos.registrar(c.aluno().getFirebaseUid(),new NotificacaoDTO.Dispositivo(UUID.randomUUID().toString(),"sem-push-"+UUID.randomUUID(),true));
+        dispositivos.preferencias(c.aluno().getFirebaseUid(),new NotificacaoDTO.Preferencias(false,true));
+        var mudanca=new Turma();mudanca.setTurno("NOITE");turmaService.atualizarTurma(c.turma().getId(),mudanca);distribuir();
+        assertEquals(1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).stream().filter(n->n.tipo().equals("HORARIO_ALTERADO")).count());assertTrue(notificacoes.listar(ausente.getFirebaseUid(),0,50).isEmpty());
+        assertTrue(entregaRepo.findAll().stream().noneMatch(x->x.dispositivo.id.equals(dispositivo.id())));
+        turmaService.atualizarTurma(c.turma().getId(),mudanca);distribuir();assertEquals(1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).getTotalElements());
+        Long id=iniciar(c,"IDA");var amostra=new PosicaoRequest("cancelar",-8.1,-35.1,clock.instant(),5.0,null);gpsViagem.enviar(id,c.dono().getFirebaseUid(),amostra);
+        var proibida=new Turma();proibida.setTurno("MANHA");assertThrows(com.bevans.exception.TurmaComRotaAtivaException.class,()->turmaService.atualizarTurma(c.turma().getId(),proibida));assertEquals("NOITE",turmas.findById(c.turma().getId()).orElseThrow().getTurno());
+        assertThrows(AccessDeniedException.class,()->cancelamentoViagem.cancelar(id,c.aluno().getFirebaseUid()));assertThrows(AccessDeniedException.class,()->cancelamentoViagem.cancelar(id,usuario("MOTORISTA").getFirebaseUid()));
+        var r=service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));assertThrows(ResponseStatusException.class,()->cancelamentoViagem.cancelar(id,c.dono().getFirebaseUid()));
+        service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,r.versao()));cancelamentoViagem.cancelar(id,c.dono().getFirebaseUid());cancelamentoViagem.cancelar(id,c.dono().getFirebaseUid());distribuir();
+        assertEquals(1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).stream().filter(n->n.tipo().equals("VIAGEM_CANCELADA")).count());assertNull(gpsViagem.consultar(id,c.aluno().getFirebaseUid()).latitude());
+        dispositivos.revogar(c.aluno().getFirebaseUid(),dispositivo.instalacaoId());
+    }
+    @Test void filaRecuperaReservaVencidaConsomeUmaVezEInterrompeAposCincoFalhas()throws Exception{
+        ((Relogio)clock).agora=clock.instant().plusSeconds(3600);distribuir();var c=cenario();Long id=iniciar(c,"IDA");distribuir();var op=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
+        var o=new OutboxNotificacao();o.chave="RECUPERACAO:"+UUID.randomUUID();o.tipo="VIAGEM_INICIADA";o.operacaoId=op.id;o.criadaEm=clock.instant();o.proximaTentativa=clock.instant();o=outbox.saveAndFlush(o);Long evento=o.id;
+        assertEquals(evento,reservas.reservar());((Relogio)clock).agora=clock.instant().plusSeconds(120);assertEquals(evento,reservas.reservar());
+        assertEquals(2,outbox.findById(evento).orElseThrow().tentativas);
+        long antes=notificacoes.listar(c.aluno().getFirebaseUid(),0,50).getTotalElements();var pool=Executors.newFixedThreadPool(2);
+        try{var a=pool.submit(()->notificacoes.distribuir(evento));var b=pool.submit(()->notificacoes.distribuir(evento));a.get(20,TimeUnit.SECONDS);b.get(20,TimeUnit.SECONDS);}finally{pool.shutdownNow();}
+        assertEquals(antes+1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).getTotalElements());assertEquals("PROCESSADA",outbox.findById(evento).orElseThrow().estado);
+        var falha=new OutboxNotificacao();falha.chave="FALHA:"+UUID.randomUUID();falha.tipo="VIAGEM_INICIADA";falha.operacaoId=op.id;falha.criadaEm=clock.instant();falha.proximaTentativa=clock.instant();falha=outbox.saveAndFlush(falha);
+        for(int n=1;n<=5;n++){assertEquals(falha.id,reservas.reservar());reservas.falhar(falha.id);var atual=outbox.findById(falha.id).orElseThrow();assertEquals(n,atual.tentativas);((Relogio)clock).agora=atual.proximaTentativa;}
+        assertEquals("FALHA",outbox.findById(falha.id).orElseThrow().estado);assertNull(reservas.reservar());
+    }
+    @Test void horariosEParadasPublicosNotificamMudancasEfetivas(){
+        var c=cenario();var pedido=new RotaPublicaRequest(c.turma().getId(),"Pública","Caruaru",CategoriaRota.OUTROS,ModoRota.FIXA,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),null);
+        var rota=publicas.criar(c.dono().getId(),pedido);publicas.atualizar(rota.id(),c.dono().getId(),pedido);distribuir();assertTrue(notificacoes.listar(c.aluno().getFirebaseUid(),0,50).isEmpty());
+        var horario=new RotaPublicaRequest(c.turma().getId(),"Pública","Caruaru",CategoriaRota.OUTROS,ModoRota.FIXA,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(19,0),null);
+        publicas.atualizar(rota.id(),c.dono().getId(),horario);var parada=publicas.salvarParadas(rota.id(),c.dono().getId(),List.of(new ParadaPublicaDTO(null,"Praça",-8.1,-35.1,null))).paradas().getFirst();
+        publicas.salvarParadas(rota.id(),c.dono().getId(),List.of(parada));distribuir();
+        var avisos=notificacoes.listar(c.aluno().getFirebaseUid(),0,50);assertEquals(2,avisos.getTotalElements());assertTrue(avisos.stream().allMatch(n->n.contextoTipo().equals("ROTA_PUBLICA")&&n.contextoId().equals(rota.id())));assertEquals(1,avisos.stream().filter(n->n.tipo().equals("HORARIO_ALTERADO")).count());
+    }
+    @Test void cancelamentoAntesDaExecucaoAvisaInscricaoSemConfundirIds(){
+        var dono=usuario("MOTORISTA");var e=excursoes.criar(dono.getFirebaseUid(),new ExcursaoRequest("Cancelar","Destino",-8.3,-35.3,"Origem",-8.0,-35.0,clock.instant().plusSeconds(86400),null,12,null));e=excursoes.publicar(e.id(),dono.getFirebaseUid(),e.versao());
+        var convite=convites.emitir(e.id(),dono.getFirebaseUid(),clock.instant().plusSeconds(3600));String token=inscricoes.emitirCredencial(convite.token()).token();inscricoes.solicitar(convite.token(),token,new InscricaoExcursaoRequest("Individual","cancelamento@test.invalid",null,"Pin",-8.1,-35.1,true,true));
+        excursoes.cancelar(e.id(),dono.getFirebaseUid());excursoes.cancelar(e.id(),dono.getFirebaseUid());distribuir();
+        var aviso=avisosWeb.listar(token,0,20);assertEquals(1,aviso.getTotalElements());assertEquals("VIAGEM_CANCELADA",aviso.getContent().getFirst().tipo());assertEquals("EXCURSAO",aviso.getContent().getFirst().contextoTipo());assertEquals(e.id(),aviso.getContent().getFirst().contextoId());
+    }
+    @Test void consumidorRealMantemCentralSemFcmEEntregaTemRetryLimitado(){
+        distribuir();var c=cenario();var d=dispositivos.registrar(c.aluno().getFirebaseUid(),new NotificacaoDTO.Dispositivo(UUID.randomUUID().toString(),"worker-local-"+UUID.randomUUID(),true));iniciar(c,"IDA");
+        new NotificacaoWorker(notificacoes,pushes,new FirebasePushGateway(false),reservas).executar();
+        assertEquals(1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).getTotalElements());
+        var entrega=entregaRepo.findAll().stream().filter(e->e.dispositivo.id.equals(d.id())).findFirst().orElseThrow();assertEquals("PENDENTE",entrega.estado);assertEquals(0,entrega.tentativas);assertEquals("INDISPONIVEL",entrega.resultado);
+        for(int n=1;n<=5;n++){
+            ((Relogio)clock).agora=entregaRepo.findById(entrega.id).orElseThrow().proximaTentativa;var pedido=pushes.reservar();assertNotNull(pedido);assertEquals(entrega.id,pedido.entrega());pushes.concluir(pedido,PushGateway.Resultado.TRANSITORIO);
+            assertEquals(n,entregaRepo.findById(entrega.id).orElseThrow().tentativas);
+        }
+        assertEquals("FALHA",entregaRepo.findById(entrega.id).orElseThrow().estado);assertTrue(dispositivoRepo.findById(d.id()).orElseThrow().ativo);dispositivos.revogar(c.aluno().getFirebaseUid(),d.instalacaoId());
     }
     @Test void proximidadeRespeitaOrdemGpsRecenteDeduplicacaoEExpiraFilaEPush(){
         var c=cenario();var outro=usuario("PASSAGEIRO");var v=new AlunoTurma();v.setTurma(c.turma());v.setAluno(outro);v.setStatus("APROVADO");vinculos.save(v);

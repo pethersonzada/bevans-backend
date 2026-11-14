@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ColetaPrivadaService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AvisosConfiguracaoService avisos;
     private final ColetaPrivadaRepository coletas;private final ParadaPrivadaRepository paradas;private final EscolhaParadaPrivadaRepository escolhas;
     private final TurmaRepository turmas;private final UsuarioRepository usuarios;private final AlunoTurmaRepository vinculos;
     private final EnderecoRepository enderecos;private final ViagemRepository viagens;private final PresencaRepository presencas;
@@ -51,10 +52,17 @@ public class ColetaPrivadaService {
             var nova=d.paradas().stream().filter(p->Objects.equals(p.id(),e.getParada().getId())).findFirst().orElse(null);var antiga=e.getParada();
             if(d.modo()!=c.getModo()||nova==null||nova.latitude()!=antiga.getLatitude()||nova.longitude()!=antiga.getLongitude()||!Objects.equals(nova.horario(),antiga.getHorario()))throw conflito("Parada utilizada: remova ou reconcilie as escolhas antes de alterá-la.");
         }
+        var antigas=existentes.stream().filter(ParadaPrivada::isAtiva).map(p->new ColetaPrivadaRequest.Parada(p.getId(),p.getNome(),p.getLatitude(),p.getLongitude(),p.getHorario(),true)).toList();
+        var novas=d.paradas().stream().map(p->new ColetaPrivadaRequest.Parada(p.id(),p.nome().trim(),p.latitude(),p.longitude(),p.horario(),true)).toList();
+        boolean mudou=(c==null?ModoColetaPrivada.PORTA_A_PORTA:c.getModo())!=d.modo()||!antigas.stream().map(p->new ColetaPrivadaRequest.Parada(p.id(),p.nome(),p.latitude(),p.longitude(),null,true)).toList().equals(novas.stream().map(p->new ColetaPrivadaRequest.Parada(p.id(),p.nome(),p.latitude(),p.longitude(),null,true)).toList());
+        boolean horariosMudaram=!antigas.stream().filter(p->p.horario()!=null).map(p->java.util.Arrays.asList(p.id(),p.horario())).toList().equals(novas.stream().filter(p->p.horario()!=null).map(p->java.util.Arrays.asList(p.id(),p.horario())).toList());
         if(c==null){c=new ColetaPrivada();c.criar(t,s);c=coletas.saveAndFlush(c);}
         existentes.forEach(ParadaPrivada::desativar);int ordem=0;
         for(var p:d.paradas()){var a=p.id()==null?new ParadaPrivada():porId.get(p.id());a.configurar(c,p.nome().trim(),p.latitude(),p.longitude(),ordem++,p.horario());paradas.save(a);}
-        paradas.flush();c.alterar(d.modo());coletas.saveAndFlush(c);return consultar(id,s,uid,null);
+        paradas.flush();c.alterar(d.modo());coletas.saveAndFlush(c);
+        if(mudou&&avisos!=null)avisos.turma(id,"TURMA",id,"TRAJETO_ALTERADO");
+        if(horariosMudaram&&avisos!=null)avisos.turma(id,"TURMA",id,"HORARIO_ALTERADO");
+        return consultar(id,s,uid,null);
     }
     @Transactional public void escolher(Long id,String s,String uid,Long alunoId,Long paradaId,Long versao){
         Turma t=turma(id,uid,false,true);Usuario u=usuario(uid);Long aluno=alunoId==null?u.getId():alunoId;

@@ -16,6 +16,8 @@ import java.util.*;
 
 @Service
 public class RotaPublicaService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private org.springframework.context.ApplicationEventPublisher eventos;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AvisosConfiguracaoService avisos;
     private final RotaPublicaRepository rotas;
     private final ParadaPublicaRepository paradas;
     private final TurmaRepository turmas;
@@ -83,11 +85,12 @@ public class RotaPublicaService {
     @Transactional
     public RotaPublicaDTO atualizar(Long id,Long motoristaId,RotaPublicaRequest dados) {
         RotaPublica r=lockRota(id,motoristaId);
+        var antes=dto(r);
         if(dados==null || !Objects.equals(dados.turmaId(),r.getTurma().getId())) throw new IllegalArgumentException("Não é permitido trocar a turma da rota.");
         if(!embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"))).isEmpty()
                 && (dados.modo()!=r.getModo()||!Objects.equals(dados.dias(),r.getDias())||!Objects.equals(dados.horarioIda(),r.getHorarioIda())||!Objects.equals(dados.horarioVolta(),r.getHorarioVolta())))
             throw new SolicitacaoConflictException("Há embarques aprovados: preserve modalidade, dias e horários.");
-        aplicar(r,dados);return dto(rotas.saveAndFlush(r));
+        aplicar(r,dados);var depois=dto(rotas.saveAndFlush(r));avisarMudancas(r,antes,depois);return depois;
     }
     @Transactional
     public RotaPublicaDTO permitirPontoExcepcional(Long id,Long motoristaId,boolean permitir) {
@@ -109,6 +112,7 @@ public class RotaPublicaService {
     @Transactional
     public RotaPublicaDTO salvarParadas(Long id,Long motoristaId,List<ParadaPublicaDTO> dados) {
         RotaPublica r=lockRota(id,motoristaId);
+        var antes=dto(r);
         if(dados==null || dados.size()>limiteParadas) throw new IllegalArgumentException("Limite de "+limiteParadas+" paradas por rota.");
         List<ParadaPublica> existentes=paradas.findByRotaIdOrderByOrdemAscIdAsc(id);
         Map<Long,ParadaPublica> porId=new HashMap<>();existentes.forEach(p->porId.put(p.getId(),p));
@@ -132,7 +136,12 @@ public class RotaPublicaService {
             ParadaPublica p=d.id()==null?new ParadaPublica():porId.get(d.id());p.setRota(r);p.setAtiva(true);p.setOrdem(ordem++);
             p.setNome(d.nome().trim());p.setLatitude(d.latitude());p.setLongitude(d.longitude());p.setHorario(d.horario());paradas.save(p);
         }
-        paradas.flush();return dto(r);
+        paradas.flush();var depois=dto(r);avisarMudancas(r,antes,depois);return depois;
+    }
+    private void avisarMudancas(RotaPublica r,RotaPublicaDTO antes,RotaPublicaDTO depois){
+        if(avisos==null)return;
+        if(!Objects.equals(antes.dias(),depois.dias())||!Objects.equals(antes.horarioIda(),depois.horarioIda())||!Objects.equals(antes.horarioVolta(),depois.horarioVolta())||!antes.paradas().stream().filter(p->p.horario()!=null).map(p->List.of(p.id(),p.horario())).toList().equals(depois.paradas().stream().filter(p->p.horario()!=null).map(p->List.of(p.id(),p.horario())).toList()))avisos.turma(r.getTurma().getId(),"ROTA_PUBLICA",r.getId(),"HORARIO_ALTERADO");
+        if(antes.modo()!=depois.modo()||!Objects.equals(antes.origemNome(),depois.origemNome())||!Objects.equals(antes.origemLatitude(),depois.origemLatitude())||!Objects.equals(antes.origemLongitude(),depois.origemLongitude())||!Objects.equals(antes.destinoNome(),depois.destinoNome())||!Objects.equals(antes.destinoLatitude(),depois.destinoLatitude())||!Objects.equals(antes.destinoLongitude(),depois.destinoLongitude())||!antes.paradas().stream().map(p->List.of(p.id(),p.nome(),p.latitude(),p.longitude())).toList().equals(depois.paradas().stream().map(p->List.of(p.id(),p.nome(),p.latitude(),p.longitude())).toList()))avisos.turma(r.getTurma().getId(),"ROTA_PUBLICA",r.getId(),"TRAJETO_ALTERADO");
     }
     @Transactional(readOnly=true)
     public RotaPublicaDTO consultar(Long id) {return dto(rotas.findById(id).orElseThrow(this::naoEncontrada));}
@@ -163,6 +172,7 @@ public class RotaPublicaService {
         Integer cap=turmas.capacidadeAtual(t.getId());
         if(cap==null || vinculos.countByTurmaIdAndStatus(t.getId(),"APROVADO")>=cap)throw new CapacidadeException("Rota sem vagas disponíveis.");
         if(v==null){v=new AlunoTurma();v.setTurma(t);v.setAluno(aluno);}v.setStatus("PENDENTE");v=vinculos.saveAndFlush(v);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto("NOVA_SOLICITACAO","SOLICITACAO_VAGA",v.getId(),t.getMotorista().getId(),null,"NOVA_VAGA:"+v.getId()+":"+UUID.randomUUID()));
         return new SolicitacaoVagaDTO(v.getId(),t.getId(),r.getNome(),v.getStatus());
     }
     private RotaPublicaDTO dto(RotaPublica r) {

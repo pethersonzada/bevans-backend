@@ -103,7 +103,9 @@ public class EmbarqueService {
         boolean possuiVaga=vinculo!=null&&"APROVADO".equals(vinculos.statusAtual(vinculo.getId()));
         Integer cap=turmas.capacidadeAtual(r.getTurma().getId());
         if(!possuiVaga&&(cap==null||vinculos.countByTurmaIdAndStatus(r.getTurma().getId(),"APROVADO")>=cap))throw new CapacidadeException("Rota sem vagas disponíveis.");
-        e.setStatus(StatusEmbarque.PENDENTE);e.setCriadoEm(clock.instant());return dto(pedidos.saveAndFlush(e));
+        e.setStatus(StatusEmbarque.PENDENTE);e.setCriadoEm(clock.instant());pedidos.saveAndFlush(e);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto("NOVA_SOLICITACAO","EMBARQUE",e.getId(),r.getTurma().getMotorista().getId(),null,"NOVO_PEDIDO:"+e.getId()));
+        return dto(e);
     }
     @Transactional
     public EmbarqueDTO analisar(Long id,Long motorista,StatusEmbarque status) {

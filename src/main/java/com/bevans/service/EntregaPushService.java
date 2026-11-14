@@ -11,9 +11,9 @@ public class EntregaPushService {
     public record Pedido(Long entrega,Long notificacao,String token,String hash,String titulo,String mensagem,int tentativa){@Override public String toString(){return "PedidoPush[segredo protegido]";}}
     private final EntregaPushRepository entregas;private final PreferenciaNotificacaoRepository preferencias;
     private final OperacaoViagemRepository operacoes;private final AlunoTurmaRepository vinculos;private final Clock clock;private final EntityManager em;
-    private final EmbarqueRepository embarques;private final ExcursaoRepository excursoes;
     private final ContextoProximidadeService proximidade;
-    public EntregaPushService(EntregaPushRepository e,PreferenciaNotificacaoRepository p,OperacaoViagemRepository o,AlunoTurmaRepository v,Clock c,EntityManager em,EmbarqueRepository embarques,ExcursaoRepository excursoes,ContextoProximidadeService proximidade){entregas=e;preferencias=p;operacoes=o;vinculos=v;clock=c;this.em=em;this.embarques=embarques;this.excursoes=excursoes;this.proximidade=proximidade;}
+    private final AutorizacaoNotificacaoService autorizacao;
+    public EntregaPushService(EntregaPushRepository e,PreferenciaNotificacaoRepository p,OperacaoViagemRepository o,AlunoTurmaRepository v,Clock c,EntityManager em,ContextoProximidadeService proximidade,AutorizacaoNotificacaoService autorizacao){entregas=e;preferencias=p;operacoes=o;vinculos=v;clock=c;this.em=em;this.proximidade=proximidade;this.autorizacao=autorizacao;}
     @Transactional public Pedido reservar(){
         var lista=entregas.pendentes(clock.instant(),PageRequest.of(0,20));
         for(var e:lista){em.refresh(e);
@@ -29,12 +29,7 @@ public class EntregaPushService {
         var d=e.dispositivo;var n=e.notificacao;
         if(!d.ativo||n.usuarioId==null||!n.usuarioId.equals(d.usuarioId)||!preferencias.findById(d.usuarioId).map(p->p.pushOperacional).orElse(true))return false;
         if(ContextoProximidadeService.TIPOS.contains(n.tipo)&&!proximidade.valido(n.operacaoId,n.registroId,n.tipo,n.criadaEm))return false;
-        if(n.operacaoId==null)return switch(n.contextoTipo){
-            case "SOLICITACAO_VAGA"->vinculos.findById(n.contextoId).map(v->v.getAluno().getId().equals(d.usuarioId)).orElse(false);
-            case "EMBARQUE"->embarques.findById(n.contextoId).map(v->v.getAluno().getId().equals(d.usuarioId)).orElse(false);
-            case "EXCURSAO"->excursoes.findById(n.contextoId).map(v->v.getOrganizador().getId().equals(d.usuarioId)).orElse(false);
-            default->false;
-        };
+        if(n.operacaoId==null)return autorizacao.direto(n.contextoTipo,n.contextoId,n.tipo,n.usuarioId,null);
         var op=operacoes.findById(n.operacaoId).orElseThrow();
         return op.motorista.getId().equals(d.usuarioId)||(op.viagem!=null&&vinculos.existsByTurmaIdAndAlunoIdAndStatus(op.viagem.getTurma().getId(),d.usuarioId,"APROVADO"));
     }

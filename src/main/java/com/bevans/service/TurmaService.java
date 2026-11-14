@@ -31,6 +31,7 @@ import com.bevans.repository.ViagemRepository;
 public class TurmaService {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private org.springframework.context.ApplicationEventPublisher eventos;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private AvisosConfiguracaoService avisos;
 
     private final TurmaRepository turmaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -303,6 +304,8 @@ public class TurmaService {
                         )
                 );
         entityManager.refresh(turma, LockModeType.PESSIMISTIC_WRITE);
+        var percursoAnterior=java.util.Arrays.asList(turma.getOrigemNome(),turma.getOrigemLatitude(),turma.getOrigemLongitude(),turma.getDestinoNome(),turma.getDestinoLatitude(),turma.getDestinoLongitude());
+        var turnoAnterior=turma.getTurno();
 
         if (turmaAtualizada.getCapacidade() != null) {
             validarCapacidade(turmaAtualizada.getCapacidade());
@@ -403,7 +406,14 @@ public class TurmaService {
             );
         }
 
-        return turmaRepository.save(turma);
+        boolean percursoMudou=!percursoAnterior.equals(java.util.Arrays.asList(turma.getOrigemNome(),turma.getOrigemLatitude(),turma.getOrigemLongitude(),turma.getDestinoNome(),turma.getDestinoLatitude(),turma.getDestinoLongitude()));
+        boolean horarioMudou=!java.util.Objects.equals(turnoAnterior,turma.getTurno());
+        if((percursoMudou||horarioMudou)&&viagemRepository.existsByTurmaIdAndStatus(turmaId,"EM_ANDAMENTO"))throw new TurmaComRotaAtivaException("Não altere percurso ou turno durante viagem ativa.");
+        var salva=turmaRepository.save(turma);
+        if(avisos!=null){
+            if(percursoMudou)avisos.turma(turmaId,"TURMA",turmaId,"TRAJETO_ALTERADO");
+            if(horarioMudou)avisos.turma(turmaId,"TURMA",turmaId,"HORARIO_ALTERADO");
+        }return salva;
     }
 
     @Transactional
@@ -474,6 +484,7 @@ public class TurmaService {
         vinculo.setStatus("PENDENTE");
 
         alunoTurmaRepository.save(vinculo);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto("NOVA_SOLICITACAO","SOLICITACAO_VAGA",vinculo.getId(),turma.getMotorista().getId(),null,"NOVA_VAGA:"+vinculo.getId()+":"+UUID.randomUUID()));
     }
 
     public List<AlunoTurma> listarAlunosPorStatus(

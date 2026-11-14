@@ -43,7 +43,7 @@ anterior EMBARCADO. Não há inferência por GPS.
 Alterações só durante operação ativa. Retry do mesmo estado apenas retorna o
 registro, mesmo após finalizar, sem nova escrita. Novas alterações em encerrada
 retornam 409. Motorista atende quem não tem celular. Finalização/cancelamento de
-Excursão e finalização de Viagem recusam pessoas ainda EMBARCADAS; motorista pode
+Excursão e finalização/cancelamento de Viagem recusam pessoas ainda EMBARCADAS; motorista pode
 registrar desembarque real ou correção auditada antes de encerrar.
 
 Contadores vêm de registros persistidos: esperados = aguardando + naVan +

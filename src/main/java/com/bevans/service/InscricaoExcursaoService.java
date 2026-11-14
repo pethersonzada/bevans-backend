@@ -93,7 +93,7 @@ public class InscricaoExcursaoService {
     @Transactional public InscricaoExcursaoDTO cancelar(String token){
         var c=credencial(token);var e=lock(c.getExcursao().getId());var i=inscricoes.findByCredencialId(c.getId()).orElseThrow(this::ausente);em.refresh(i);
         if(i.getEstado()==StatusInscricaoExcursao.CANCELADA||e.getEstado()==EstadoExcursao.CANCELADA)return dto(i);
-        aberta(e);i.cancelar();return dto(inscricoes.saveAndFlush(i));
+        aberta(e);i.cancelar();inscricoes.saveAndFlush(i);avisarCancelamento(i,true);return dto(i);
     }
     @Transactional public InscricaoExcursaoDTO confirmar(Long excursaoId,Long id,String uid){
         administracao.consultar(excursaoId,uid);var e=lock(excursaoId);aberta(e);
@@ -112,7 +112,11 @@ public class InscricaoExcursaoService {
     @Transactional public InscricaoExcursaoDTO cancelarPeloDono(Long excursaoId,Long id,String uid){
         administracao.consultar(excursaoId,uid);var e=lock(excursaoId);
         var i=inscricoes.findById(id).filter(v->v.getExcursao().getId().equals(excursaoId)).orElseThrow(this::ausente);em.refresh(i);
-        if(i.getEstado()==StatusInscricaoExcursao.CANCELADA)return dto(i);aberta(e);i.cancelar();return dto(inscricoes.saveAndFlush(i));
+        if(i.getEstado()==StatusInscricaoExcursao.CANCELADA)return dto(i);aberta(e);i.cancelar();inscricoes.saveAndFlush(i);avisarCancelamento(i,false);return dto(i);
+    }
+    private void avisarCancelamento(InscricaoExcursao i,boolean organizador){if(eventos==null)return;
+        eventos.publishEvent(new EventosDeViagem.Direto("INSCRICAO_CANCELADA","EXCURSAO",i.getExcursao().getId(),null,i.getId(),"INSCRICAO:"+i.getId()+":CANCELADA"));
+        if(organizador)eventos.publishEvent(new EventosDeViagem.Direto("INSCRICAO_CANCELADA","EXCURSAO",i.getExcursao().getId(),i.getExcursao().getOrganizador().getId(),null,"INSCRICAO:"+i.getId()+":CANCELADA:ORGANIZADOR"));
     }
     @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public VagasExcursaoDTO vagas(Long id,String uid){

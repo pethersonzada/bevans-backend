@@ -1,0 +1,102 @@
+package com.bevans.service;
+import com.bevans.model.*;
+import com.bevans.dto.*;
+import com.bevans.repository.*;
+import java.time.*;
+import java.util.*;
+import java.util.concurrent.*;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.*;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.server.ResponseStatusException;
+import static org.junit.jupiter.api.Assertions.*;
+@SpringBootTest(properties={"spring.config.import=","app.firebase.enabled=false","spring.datasource.url=jdbc:h2:mem:operacao;DB_CLOSE_DELAY=-1",
+ "spring.datasource.username=sa","spring.datasource.password=","spring.datasource.driver-class-name=org.h2.Driver",
+ "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect","spring.jpa.hibernate.ddl-auto=create-drop","spring.sql.init.mode=never"})
+@Import(OperacaoIntegrationTest.Tempo.class)
+class OperacaoIntegrationTest {
+    @TestConfiguration static class Tempo {@Bean @Primary Clock testeClock(){var z=ZoneId.of("America/Sao_Paulo");return Clock.fixed(LocalDate.now(z).atTime(12,0).atZone(z).toInstant(),z);}}
+    @Autowired OperacaoService service;@Autowired ViagemService viagens;@Autowired ViagemRepository viagemRepo;
+    @Autowired UsuarioRepository usuarios;@Autowired TurmaRepository turmas;@Autowired AlunoTurmaRepository vinculos;
+    @Autowired EnderecoRepository enderecos;@Autowired PresencaRepository presencas;@Autowired Clock clock;
+    @Autowired ExcursaoService excursoes;@Autowired ConviteExcursaoService convites;@Autowired InscricaoExcursaoService inscricoes;
+    @Autowired ExecucaoExcursaoService execucoes;@Autowired RotaPublicaService publicas;@Autowired EmbarqueService embarques;
+    @Autowired ColetaPrivadaService coletas;@Autowired OperacaoViagemRepository operacoes;@Autowired RegistroOperacionalRepository registros;
+    private record Cenario(Turma turma,Usuario dono,Usuario aluno){}
+    private Usuario usuario(String tipo){String id=UUID.randomUUID().toString();var u=new Usuario();u.setNome(id);u.setTelefone(id);u.setEmail(id+"@test.invalid");u.setFirebaseUid(id);u.setTipo(tipo);return usuarios.save(u);}
+    private Cenario cenario(){
+        var d=usuario("MOTORISTA");var a=usuario("PASSAGEIRO");var t=new Turma();t.setNome("Operação");t.setMotorista(d);t.setCapacidade(12);t.setOrigemNome("Garagem");t.setOrigemLatitude(-8.0);t.setOrigemLongitude(-35.0);t.setDestinoNome("Campus");t.setDestinoLatitude(-8.3);t.setDestinoLongitude(-35.3);t=turmas.save(t);
+        var v=new AlunoTurma();v.setTurma(t);v.setAluno(a);v.setStatus("APROVADO");vinculos.save(v);
+        var e=new Endereco();e.setUsuario(a);e.setLatitude(-8.1);e.setLongitude(-35.1);e=enderecos.save(e);var f=new Endereco();f.setUsuario(a);f.setLatitude(-8.2);f.setLongitude(-35.2);f=enderecos.save(f);
+        var p=new Presenca();p.setTurma(t);p.setUsuario(a);p.setData(LocalDate.now(clock));p.setStatus("AMBOS");p.setEnderecoIda(e);p.setEnderecoVolta(f);presencas.save(p);return new Cenario(t,d,a);
+    }
+    private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);return viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow().getId();}
+    private OperacaoDTO.Alteracao estado(EstadoOperacional e,long versao){return new OperacaoDTO.Alteracao(e,false,versao,null);}
+    @Test void alunoConfirmaSozinhoMotoristaRepeteSemDuplicarEDesembarqueTambem(){
+        var c=cenario();Long id=iniciar(c,"IDA");var antes=service.minha(id,c.aluno().getFirebaseUid());assertEquals(EstadoOperacional.AGUARDANDO,antes.estado());
+        var r=service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));String autor=r.autor();
+        var repetido=service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),c.dono().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));assertEquals(autor,repetido.autor());assertEquals(1,service.historicoMeu(id,c.aluno().getFirebaseUid()).size());
+        assertThrows(ResponseStatusException.class,()->viagens.encerrarRota(c.turma().getId()));
+        r=service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,r.versao()));
+        assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().desembarcados());assertEquals(0,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().naVan());
+        viagens.encerrarRota(c.turma().getId());assertEquals(EstadoOperacional.DESEMBARCADO,service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,0)).estado());
+        assertThrows(ResponseStatusException.class,()->service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,2)));
+    }
+    @Test void motoristaCorrigeComAuditoriaEReplayAntigoNaoDesfazCorrecao(){
+        var c=cenario();Long id=iniciar(c,"IDA");var r=service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).registros().get(0);
+        assertThrows(ResponseStatusException.class,()->service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,0)));
+        r=service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),c.dono().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));Long reg=r.id();
+        assertThrows(AccessDeniedException.class,()->service.alterarMinha(id,c.aluno().getFirebaseUid(),new OperacaoDTO.Alteracao(EstadoOperacional.AGUARDANDO,true,1L,"Engano")));
+        var corrigido=service.alterarDono(TipoOperacao.VIAGEM,id,reg,c.dono().getFirebaseUid(),new OperacaoDTO.Alteracao(EstadoOperacional.AGUARDANDO,true,1L,"Toque acidental"));
+        assertEquals(EstadoOperacional.AGUARDANDO,corrigido.estado());assertEquals(2,service.historico(TipoOperacao.VIAGEM,id,reg,c.dono().getFirebaseUid()).size());
+        assertThrows(ResponseStatusException.class,()->service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0)));
+    }
+    @Test void confirmacoesConcorrentesDeAtoresDiferentesContamUmaVez() throws Exception {
+        var c=cenario();Long id=iniciar(c,"IDA");var r=service.minha(id,c.aluno().getFirebaseUid());var inicio=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);
+        try{
+            var a=pool.submit(()->{inicio.await();return service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));});
+            var b=pool.submit(()->{inicio.await();return service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),c.dono().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));});inicio.countDown();
+            assertEquals(a.get(20,TimeUnit.SECONDS).autor(),b.get(20,TimeUnit.SECONDS).autor());
+            assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().naVan());assertEquals(1,service.historicoMeu(id,c.aluno().getFirebaseUid()).size());
+        }finally{inicio.countDown();pool.shutdownNow();}
+    }
+    @Test void isolamentoDeTurmasViagensESentidosEContadoresPersistidos(){
+        var c=cenario();var outra=cenario();Long id=iniciar(c,"IDA"),alheia=iniciar(outra,"IDA");var r=service.minha(id,c.aluno().getFirebaseUid());
+        assertThrows(AccessDeniedException.class,()->service.minha(id,outra.aluno().getFirebaseUid()));assertThrows(AccessDeniedException.class,()->service.painel(TipoOperacao.VIAGEM,id,outra.dono().getFirebaseUid()));
+        assertEquals(404,assertThrows(ResponseStatusException.class,()->service.alterarDono(TipoOperacao.VIAGEM,alheia,r.id(),outra.dono().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0))).getStatusCode().value());
+        service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.NAO_EMBARCOU,0));viagens.encerrarRota(c.turma().getId());Long volta=iniciar(c,"VOLTA");
+        assertNotEquals(id,volta);assertEquals(EstadoOperacional.AGUARDANDO,service.minha(volta,c.aluno().getFirebaseUid()).estado());assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().naoEmbarcaram());
+    }
+    @Test void inscricaoExcursionistaUsaCredencialPropriaEOuOrganizadorSemAlunoTurma(){
+        var dono=usuario("MOTORISTA");long matriculas=vinculos.count();var e=excursoes.criar(dono.getFirebaseUid(),new ExcursaoRequest("Evento","Destino",-8.3,-35.3,"Origem",-8.0,-35.0,clock.instant().plusSeconds(86400),null,12,null));e=excursoes.publicar(e.id(),dono.getFirebaseUid(),e.versao());
+        var convite=convites.emitir(e.id(),dono.getFirebaseUid(),clock.instant().plusSeconds(3600));String token=inscricoes.emitirCredencial(convite.token()).token();var i=inscricoes.solicitar(convite.token(),token,new InscricaoExcursaoRequest("Sem celular","contato@test.invalid",null,"Pin",-8.1,-35.1,true,true));inscricoes.confirmar(e.id(),i.id(),dono.getFirebaseUid());
+        var x=execucoes.iniciar(e.id(),dono.getFirebaseUid(),"IDA",false);var r=service.minhaWeb(x.id(),token);assertNull(r.alunoId());assertEquals(i.id(),r.inscricaoId());
+        assertThrows(ResponseStatusException.class,()->service.minhaWeb(x.id(),convite.token()));
+        r=service.alterarDono(TipoOperacao.EXCURSAO,x.id(),r.id(),dono.getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
+        assertEquals("MOTORISTA",r.origem());service.alterarWeb(x.id(),token,estado(EstadoOperacional.DESEMBARCADO,r.versao()));execucoes.finalizar(e.id(),x.id(),dono.getFirebaseUid());assertEquals(matriculas,vinculos.count());
+    }
+    @Test void publicasFixaEFlexivelSoIncluemPedidosAprovados(){
+        for(ModoRota modo:ModoRota.values()){
+            var c=cenario();var r=publicas.criar(c.dono().getId(),new RotaPublicaRequest(c.turma().getId(),"Pública","Caruaru",CategoriaRota.OUTROS,modo,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),null));publicas.publicar(r.id(),c.dono().getId(),true);
+            var p=publicas.salvarParadas(r.id(),c.dono().getId(),List.of(new ParadaPublicaDTO(null,"Praça",-8.1,-35.1,null))).paradas().get(0);
+            var pedido=embarques.solicitar(r.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",p.id(),null,null,null,null,null));embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
+            var pendente=usuario("PASSAGEIRO");embarques.solicitar(r.id(),pendente.getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",p.id(),null,null,null,null,null));
+            Long id=iniciar(c,"IDA");var painel=service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid());assertEquals(1,painel.contadores().esperados());assertEquals(p.id(),painel.registros().get(0).paradaId());
+            assertThrows(AccessDeniedException.class,()->service.minha(id,pendente.getFirebaseUid()));
+        }
+    }
+    @Test void coletaPrivadaUsaParadaEfetivaNoSnapshotOperacional(){
+        var c=cenario();var p=presencas.findByUsuarioIdAndTurmaIdAndData(c.aluno().getId(),c.turma().getId(),LocalDate.now(clock)).orElseThrow();p.setStatus("NAO_VOU");presencas.save(p);
+        var cfg=coletas.configurar(c.turma().getId(),"IDA",c.dono().getFirebaseUid(),new ColetaPrivadaRequest(ModoColetaPrivada.PARADAS_DEFINIDAS,0L,List.of(new ColetaPrivadaRequest.Parada(null,"Praça escolhida",-8.15,-35.15,null,true))));
+        coletas.escolher(c.turma().getId(),"IDA",c.aluno().getFirebaseUid(),null,cfg.paradas().get(0).id(),cfg.versao());p.setStatus("IDA");presencas.save(p);
+        Long id=iniciar(c,"IDA");var r=service.minha(id,c.aluno().getFirebaseUid());assertEquals(cfg.paradas().get(0).id(),r.paradaId());assertEquals(-8.15,registros.findById(r.id()).orElseThrow().latitude);
+    }
+    @Test void falhaDeSnapshotDesfazInicioInteiroSemOperacaoParcial(){
+        var c=cenario();var t=c.turma();t.setOrigemLatitude(null);t.setOrigemLongitude(null);turmas.save(t);long antes=operacoes.count();
+        assertThrows(IllegalArgumentException.class,()->viagens.iniciarRota(t.getId(),"IDA"));
+        assertTrue(viagemRepo.findFirstByTurmaIdAndStatus(t.getId(),"EM_ANDAMENTO").isEmpty());assertEquals(antes,operacoes.count());
+    }
+}

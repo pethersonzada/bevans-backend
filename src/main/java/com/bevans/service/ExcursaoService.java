@@ -22,6 +22,7 @@ public class ExcursaoService {
     private final ParadaExcursaoRepository paradas;
     private final InscricaoExcursaoRepository inscricoes;
     private final ExecucaoExcursaoRepository execucoes;
+    @org.springframework.beans.factory.annotation.Autowired private org.springframework.context.ApplicationEventPublisher publisher;
     public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock,ParadaExcursaoRepository paradas,InscricaoExcursaoRepository inscricoes,ExecucaoExcursaoRepository execucoes){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;this.paradas=paradas;this.inscricoes=inscricoes;this.execucoes=execucoes;}
     private Usuario motorista(String uid){
         Usuario u=usuarios.findByFirebaseUid(uid).orElseThrow(()->new AccessDeniedException("Perfil não encontrado."));
@@ -65,7 +66,10 @@ public class ExcursaoService {
     }
     @Transactional public ExcursaoDTO cancelar(Long id,String uid){
         Excursao e=propria(id,uid,true);if(e.getEstado()==EstadoExcursao.CONCLUIDA)throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão concluída.");
-        e.setEstado(EstadoExcursao.CANCELADA);execucoes.cancelarAtivas(id,clock.instant());inscricoes.cancelarAtivas(id);return dto(excursoes.saveAndFlush(e));
+        var ativas=execucoes.findByExcursaoIdOrderByIdAsc(id).stream().filter(x->x.getEstado()==EstadoExecucaoExcursao.EM_ANDAMENTO).map(ExecucaoExcursao::getId).toList();
+        if(publisher!=null)ativas.forEach(x->publisher.publishEvent(new EventosDeViagem.Excursao("VALIDAR_FIM",x)));
+        e.setEstado(EstadoExcursao.CANCELADA);execucoes.cancelarAtivas(id,clock.instant());inscricoes.cancelarAtivas(id);excursoes.saveAndFlush(e);
+        if(publisher!=null)ativas.forEach(x->publisher.publishEvent(new EventosDeViagem.Excursao("CANCELADA",x)));return dto(e);
     }
     @Transactional public ExcursaoDTO configurarColeta(Long id,String uid,ColetaExcursaoRequest d){
         Excursao e=propria(id,uid,true);editavel(e);

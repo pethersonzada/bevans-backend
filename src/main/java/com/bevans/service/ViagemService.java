@@ -22,6 +22,8 @@ public class ViagemService {
     private final com.bevans.repository.PosicaoViagemRepository posicoes;
     private org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> coletas;
     @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.context.ApplicationEventPublisher publisher;
+    @org.springframework.beans.factory.annotation.Autowired
     public ViagemService(ViagemRepository v,TurmaRepository t,com.bevans.repository.PosicaoViagemRepository p,org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> c){this(v,t,p);coletas=c;}
 
     public ViagemService(ViagemRepository viagemRepository, TurmaRepository turmaRepository,com.bevans.repository.PosicaoViagemRepository posicoes) {
@@ -47,7 +49,8 @@ public class ViagemService {
         novaViagem.setSentido(sentido);
         novaViagem.setStatus("EM_ANDAMENTO");
 
-        viagemRepository.save(novaViagem);
+        viagemRepository.saveAndFlush(novaViagem);
+        if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Viagem("INICIADA",novaViagem.getId()));
     }
 
     @Transactional
@@ -57,9 +60,11 @@ public class ViagemService {
         
         if (viagemAtiva.isPresent()) {
             Viagem viagem = viagemAtiva.get();
+            if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Viagem("VALIDAR_FIM",viagem.getId()));
             viagem.setStatus("FINALIZADA");
             posicoes.findById(viagem.getId()).ifPresent(p->{p.limpar();posicoes.save(p);});
             viagemRepository.save(viagem);
+            if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Viagem("FINALIZADA",viagem.getId()));
         }
     }
 

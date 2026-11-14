@@ -34,6 +34,8 @@ public class RotaService {
     private final PresencaRepository presencaRepository;
     private final TurmaRepository turmaRepository;
     private org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> coletas;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private java.time.Clock clock;
+    @org.springframework.beans.factory.annotation.Autowired private org.springframework.beans.factory.ObjectProvider<OperacaoService> operacoes;
     @org.springframework.beans.factory.annotation.Autowired
     public RotaService(PresencaRepository p,TurmaRepository t,EnderecoRepository e,org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> c){this(p,t,e);coletas=c;}
 
@@ -168,6 +170,7 @@ public class RotaService {
 
         boolean isVolta =
                 sentido.equalsIgnoreCase("VOLTA");
+        if(operacoes!=null&&operacoes.getIfAvailable()!=null){var salva=operacoes.getObject().rotaAtiva(turmaId,isVolta?"VOLTA":"IDA");if(salva!=null)return CompletableFuture.completedFuture(salva);}
         var coleta=coletas==null?null:coletas.getIfAvailable();
         if(coleta!=null&&coleta.usaParadas(turmaId,isVolta?"VOLTA":"IDA"))return CompletableFuture.completedFuture(
                 coleta.roteiroSistema(turmaId,isVolta?"VOLTA":"IDA",false).stream().flatMap(p->p.passageiros().stream()).toList());
@@ -191,9 +194,7 @@ public class RotaService {
 
         // 2. Buscar presenças apenas da turma selecionada.
 
-        LocalDate hoje = LocalDate.now(
-                ZoneId.of("America/Recife")
-        );
+        LocalDate hoje=clock==null?LocalDate.now(ZoneId.of("America/Recife")):LocalDate.now(clock);
 
         List<Presenca> presencasDoDia =
                 presencaRepository.findByDataAndTurmaId(

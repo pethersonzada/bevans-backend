@@ -102,6 +102,8 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.POST,"/publico/excursoes/credenciais","/publico/excursoes/inscricoes").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/inscricao").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.DELETE,"/publico/excursoes/inscricao").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/operacao/*/minha","/publico/excursoes/operacao/*/minha/historico").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.PUT,"/publico/excursoes/operacao/*/minha/estado").permitAll()
                 .anyRequest().authenticated())
             .addFilterBefore(firebaseFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(new LimiteConvitesFilter(java.time.Clock.systemUTC()),FirebaseAuthenticationFilter.class);

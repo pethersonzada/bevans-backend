@@ -29,7 +29,7 @@ class UpgradeMainSchemaPostgresIT {
                 assertEquals("23505",assertThrows(SQLException.class,()->s.execute("insert into viagem(id,turma_id,sentido,status) values(21,7,'VOLTA','EM_ANDAMENTO')")).getSQLState());
             }
             try(var paths=Files.list(Path.of("docs/migrations"))){
-                var scripts=paths.filter(p->p.toString().endsWith(".sql")).sorted().toList();assertEquals(13,scripts.size());
+                var scripts=paths.filter(p->p.toString().endsWith(".sql")).sorted().toList();assertEquals(14,scripts.size());
                 for(Path script:scripts)ScriptUtils.executeSqlScript(c,new FileSystemResource(script));
             }
             try(var s=c.createStatement();var rs=s.executeQuery("select t.id,t.capacidade,a.id,v.id,v.iniciada_em from turmas t join aluno_turma a on a.turma_id=t.id join viagem v on v.turma_id=t.id")){

@@ -17,6 +17,7 @@ public class ExecucaoExcursaoService {
     private final ExcursaoService administracao;private final RoteiroExcursaoService roteiros;private final EntityManager em;private final Clock clock;
     // Snapshot interno versionado, sem desserialização polimórfica nem datas nos pontos.
     private final ObjectMapper json=new ObjectMapper();
+    @org.springframework.beans.factory.annotation.Autowired private org.springframework.context.ApplicationEventPublisher publisher;
     public ExecucaoExcursaoService(ExecucaoExcursaoRepository x,ExcursaoRepository e,ExcursaoService a,RoteiroExcursaoService r,EntityManager em,Clock c){execucoes=x;excursoes=e;administracao=a;roteiros=r;this.em=em;clock=c;}
     private ResponseStatusException conflito(String texto){return new ResponseStatusException(HttpStatus.CONFLICT,texto);}
     private Excursao lock(Long id,String uid){
@@ -33,15 +34,16 @@ public class ExecucaoExcursaoService {
         if("VOLTA".equals(sentido)&&execucoes.findByExcursaoIdAndSentido(id,"IDA").filter(x->x.getEstado()==EstadoExecucaoExcursao.FINALIZADA).isEmpty())throw conflito("Finalize a ida antes de iniciar a volta.");
         var pontos=roteiros.paraInicio(id,uid,sentido,otimizar);String snapshot;
         try{snapshot=json.writeValueAsString(pontos);}catch(Exception ex){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível registrar o roteiro.");}
-        var x=new ExecucaoExcursao();x.criar(e,sentido,snapshot,clock.instant());return dto(execucoes.saveAndFlush(x));
+        var x=new ExecucaoExcursao();x.criar(e,sentido,snapshot,clock.instant());execucoes.saveAndFlush(x);
+        if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Excursao("INICIADA",x.getId()));return dto(x);
     }
     @Transactional public ExecucaoExcursaoDTO finalizar(Long id,Long execucaoId,String uid){
         var e=lock(id,uid);var x=execucoes.findById(execucaoId).filter(v->v.getExcursao().getId().equals(id)).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Execução não encontrada."));em.refresh(x);
         if(x.getEstado()==EstadoExecucaoExcursao.FINALIZADA)return dto(x);
         if(x.getEstado()!=EstadoExecucaoExcursao.EM_ANDAMENTO||e.getEstado()==EstadoExcursao.CANCELADA)throw conflito("Execução cancelada.");
-        x.finalizar(clock.instant());
+        if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Excursao("VALIDAR_FIM",x.getId()));x.finalizar(clock.instant());
         if("VOLTA".equals(x.getSentido())||e.getRetornoEm()==null){e.setEstado(EstadoExcursao.CONCLUIDA);excursoes.save(e);}
-        return dto(execucoes.saveAndFlush(x));
+        execucoes.saveAndFlush(x);if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Excursao("FINALIZADA",x.getId()));return dto(x);
     }
     @Transactional(readOnly=true) public List<ExecucaoExcursaoDTO> listar(Long id,String uid){administracao.consultar(id,uid);return execucoes.findByExcursaoIdOrderByIdAsc(id).stream().map(this::dto).toList();}
     private ExecucaoExcursaoDTO dto(ExecucaoExcursao x){

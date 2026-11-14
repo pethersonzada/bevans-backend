@@ -101,6 +101,8 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/convite").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST,"/publico/excursoes/credenciais","/publico/excursoes/inscricoes").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/inscricao").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/inscricao/notificacoes").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.PUT,"/publico/excursoes/inscricao/notificacoes/*/leitura").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.DELETE,"/publico/excursoes/inscricao").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/operacao/*/minha","/publico/excursoes/operacao/*/minha/historico").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.PUT,"/publico/excursoes/operacao/*/minha/estado").permitAll()

@@ -15,6 +15,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class InscricaoExcursaoService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.springframework.context.ApplicationEventPublisher eventos;
     private final ExcursaoRepository excursoes;private final InscricaoExcursaoRepository inscricoes;
     private final CredencialInscricaoExcursaoRepository credenciais;private final ParadaExcursaoRepository paradas;
     private final ConviteExcursaoService convites;private final ExcursaoService administracao;private final EntityManager em;private final Clock clock;
@@ -83,7 +85,9 @@ public class InscricaoExcursaoService {
         Instant ate=clock.instant().plusSeconds(900);if(ate.isAfter(e.getPartidaEm()))ate=e.getPartidaEm();
         var i=new InscricaoExcursao();i.criar(e,c,nome,contato,hash,p.parada(),p.nome(),p.lat(),p.lon(),clock.instant(),ate);
         c.prolongar((e.getRetornoEm()==null?e.getPartidaEm():e.getRetornoEm()).plusSeconds(7*86400));credenciais.save(c);
-        return dto(inscricoes.saveAndFlush(i));
+        inscricoes.saveAndFlush(i);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto("NOVA_INSCRICAO","EXCURSAO",e.getId(),e.getOrganizador().getId(),null,"INSCRICAO:"+i.getId()+":NOVA"));
+        return dto(i);
     }
     @Transactional(readOnly=true) public InscricaoExcursaoDTO consultar(String token){var c=credencial(token);return dto(inscricoes.findByCredencialId(c.getId()).orElseThrow(this::ausente));}
     @Transactional public InscricaoExcursaoDTO cancelar(String token){
@@ -96,7 +100,9 @@ public class InscricaoExcursaoService {
         var i=inscricoes.findById(id).filter(v->v.getExcursao().getId().equals(excursaoId)).orElseThrow(this::ausente);em.refresh(i);
         if(i.getEstado()==StatusInscricaoExcursao.CONFIRMADA)return dto(i);
         if(i.getEstado()!=StatusInscricaoExcursao.SOLICITADA||!i.getReservaValidaAte().isAfter(clock.instant()))throw conflito("Reserva expirada ou cancelada.");
-        i.confirmar(clock.instant());return dto(inscricoes.saveAndFlush(i));
+        i.confirmar(clock.instant());inscricoes.saveAndFlush(i);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto("INSCRICAO_CONFIRMADA","EXCURSAO",e.getId(),null,i.getId(),"INSCRICAO:"+i.getId()+":CONFIRMADA"));
+        return dto(i);
     }
     @Transactional(readOnly=true) public PaginaDTO<InscricaoExcursaoDTO> listar(Long id,String uid,int pagina,int tamanho){
         administracao.consultar(id,uid);if(pagina<0||pagina>10000||tamanho<1||tamanho>50)throw new IllegalArgumentException("Paginação inválida.");

@@ -25,6 +25,13 @@ class OperacaoIntegrationTest {
     @Autowired ExcursaoService excursoes;@Autowired ConviteExcursaoService convites;@Autowired InscricaoExcursaoService inscricoes;
     @Autowired ExecucaoExcursaoService execucoes;@Autowired RotaPublicaService publicas;@Autowired EmbarqueService embarques;
     @Autowired ColetaPrivadaService coletas;@Autowired OperacaoViagemRepository operacoes;@Autowired RegistroOperacionalRepository registros;
+    @Autowired NotificacaoService notificacoes;@Autowired NotificacaoRepository notificacaoRepo;
+    @Autowired OutboxNotificacaoRepository outbox;@Autowired DispositivoNotificacaoService dispositivos;
+    @Autowired DispositivoNotificacaoRepository dispositivoRepo;@Autowired EntregaPushService pushes;
+    @Autowired EntregaPushRepository entregaRepo;@Autowired org.springframework.transaction.PlatformTransactionManager tx;
+    @Autowired org.springframework.context.ApplicationEventPublisher eventos;
+    @Autowired ReservaOutboxService reservas;
+    @Autowired NotificacaoInscricaoService avisosWeb;
     private record Cenario(Turma turma,Usuario dono,Usuario aluno){}
     private Usuario usuario(String tipo){String id=UUID.randomUUID().toString();var u=new Usuario();u.setNome(id);u.setTelefone(id);u.setEmail(id+"@test.invalid");u.setFirebaseUid(id);u.setTipo(tipo);return usuarios.save(u);}
     private Cenario cenario(){
@@ -35,6 +42,42 @@ class OperacaoIntegrationTest {
     }
     private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);return viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow().getId();}
     private OperacaoDTO.Alteracao estado(EstadoOperacional e,long versao){return new OperacaoDTO.Alteracao(e,false,versao,null);}
+    private void distribuir(){for(int i=0;i<1000;i++){Long id=reservas.reservar();if(id==null)break;notificacoes.distribuir(id);} }
+    @Test void centralPersisteDeduplicaIsolaLeituraERevalidaVinculo(){
+        var c=cenario();Long id=iniciar(c,"IDA");distribuir();
+        var lista=notificacoes.listar(c.aluno().getFirebaseUid(),0,20);
+        assertEquals(1,lista.getTotalElements());assertEquals("VIAGEM_INICIADA",lista.getContent().getFirst().tipo());
+        assertEquals(1,notificacoes.naoLidas(c.aluno().getFirebaseUid()));
+        Long aviso=lista.getContent().getFirst().id();var estranho=usuario("PASSAGEIRO");
+        assertThrows(ResponseStatusException.class,()->notificacoes.ler(estranho.getFirebaseUid(),aviso));
+        notificacoes.ler(c.aluno().getFirebaseUid(),aviso);notificacoes.ler(c.aluno().getFirebaseUid(),aviso);
+        assertEquals(0,notificacoes.naoLidas(c.aluno().getFirebaseUid()));
+        var r=service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
+        service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));distribuir();
+        assertEquals(2,notificacoes.listar(c.aluno().getFirebaseUid(),0,20).getTotalElements());
+        assertEquals(2,notificacoes.listar(c.dono().getFirebaseUid(),0,20).getTotalElements());
+        var vinculo=vinculos.findByTurmaIdAndAlunoId(c.turma().getId(),c.aluno().getId()).orElseThrow();vinculo.setStatus("REMOVIDO");vinculos.save(vinculo);
+        service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),c.dono().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,r.versao()));distribuir();
+        assertEquals(2,notificacoes.listar(c.aluno().getFirebaseUid(),0,20).getTotalElements());
+        notificacoes.lerTodas(c.dono().getFirebaseUid());assertEquals(0,notificacoes.naoLidas(c.dono().getFirebaseUid()));
+    }
+    @Test void rollbackNaoPublicaEventoENovaEntregaNaoExigeFirebaseReal(){
+        var c=cenario();Long id=iniciar(c,"IDA");var op=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
+        String chave="rollback:"+UUID.randomUUID();
+        new org.springframework.transaction.support.TransactionTemplate(tx).execute(status->{eventos.publishEvent(new EventosDeViagem.Operacao(op.id,null,"VIAGEM_INICIADA",chave));status.setRollbackOnly();return null;});
+        assertFalse(outbox.existsByChave(chave));
+        String instalacao=UUID.randomUUID().toString();String token="token-local-de-teste-"+UUID.randomUUID();
+        var dispositivo=dispositivos.registrar(c.aluno().getFirebaseUid(),new NotificacaoDTO.Dispositivo(instalacao,token,true));
+        assertThrows(ResponseStatusException.class,()->dispositivos.registrar(c.dono().getFirebaseUid(),new NotificacaoDTO.Dispositivo(instalacao,token,true)));
+        distribuir();var pedido=pushes.reservar();assertNotNull(pedido);
+        assertFalse(pedido.toString().contains(token));
+        assertEquals(PushGateway.Resultado.INDISPONIVEL,new FirebasePushGateway(false).enviar(token,pedido.notificacao(),pedido.titulo(),pedido.mensagem()));
+        pushes.concluir(pedido,PushGateway.Resultado.TOKEN_INVALIDO);
+        assertFalse(dispositivoRepo.findById(dispositivo.id()).orElseThrow().ativo);
+        assertEquals("FALHA",entregaRepo.findById(pedido.entrega()).orElseThrow().estado);
+        dispositivos.registrar(c.aluno().getFirebaseUid(),new NotificacaoDTO.Dispositivo(instalacao,token+"-novo",true));
+        dispositivos.revogar(c.aluno().getFirebaseUid(),instalacao);assertFalse(dispositivoRepo.findById(dispositivo.id()).orElseThrow().ativo);
+    }
     @Test void alunoConfirmaSozinhoMotoristaRepeteSemDuplicarEDesembarqueTambem(){
         var c=cenario();Long id=iniciar(c,"IDA");var antes=service.minha(id,c.aluno().getFirebaseUid());assertEquals(EstadoOperacional.AGUARDANDO,antes.estado());
         var r=service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));String autor=r.autor();
@@ -75,6 +118,9 @@ class OperacaoIntegrationTest {
         var convite=convites.emitir(e.id(),dono.getFirebaseUid(),clock.instant().plusSeconds(3600));String token=inscricoes.emitirCredencial(convite.token()).token();var i=inscricoes.solicitar(convite.token(),token,new InscricaoExcursaoRequest("Sem celular","contato@test.invalid",null,"Pin",-8.1,-35.1,true,true));inscricoes.confirmar(e.id(),i.id(),dono.getFirebaseUid());
         var x=execucoes.iniciar(e.id(),dono.getFirebaseUid(),"IDA",false);var r=service.minhaWeb(x.id(),token);assertNull(r.alunoId());assertEquals(i.id(),r.inscricaoId());
         assertThrows(ResponseStatusException.class,()->service.minhaWeb(x.id(),convite.token()));
+        distribuir();assertEquals(2,avisosWeb.listar(token,0,20).getTotalElements());
+        assertThrows(ResponseStatusException.class,()->avisosWeb.listar(convite.token(),0,20));
+        var aviso=avisosWeb.listar(token,0,20).getContent().getFirst();avisosWeb.ler(token,aviso.id());assertNotNull(avisosWeb.listar(token,0,20).getContent().getFirst().lidaEm());
         r=service.alterarDono(TipoOperacao.EXCURSAO,x.id(),r.id(),dono.getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
         assertEquals("MOTORISTA",r.origem());service.alterarWeb(x.id(),token,estado(EstadoOperacional.DESEMBARCADO,r.versao()));execucoes.finalizar(e.id(),x.id(),dono.getFirebaseUid());assertEquals(matriculas,vinculos.count());
     }

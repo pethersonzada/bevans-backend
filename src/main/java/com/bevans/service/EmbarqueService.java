@@ -17,6 +17,8 @@ import java.util.*;
 
 @Service
 public class EmbarqueService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.springframework.context.ApplicationEventPublisher eventos;
     private final EmbarqueRepository pedidos;
     private final RotaPublicaRepository rotas;
     private final TurmaRepository turmas;
@@ -127,7 +129,9 @@ public class EmbarqueService {
             }
             e.setVinculoId(v.getId());
         }
-        e.setStatus(status);e.setAnalisadoEm(clock.instant());e.setAnalisadoPor(motorista);return dto(pedidos.saveAndFlush(e));
+        e.setStatus(status);e.setAnalisadoEm(clock.instant());e.setAnalisadoPor(motorista);pedidos.saveAndFlush(e);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto(status==StatusEmbarque.APROVADO?"SOLICITACAO_APROVADA":"SOLICITACAO_RECUSADA","EMBARQUE",e.getId(),e.getAluno().getId(),null,"PEDIDO:"+e.getId()+":"+status));
+        return dto(e);
     }
     @Transactional
     public EmbarqueDTO cancelar(Long id,Long alunoId) {

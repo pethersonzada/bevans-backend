@@ -29,6 +29,8 @@ import com.bevans.repository.ViagemRepository;
 
 @Service
 public class TurmaService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.springframework.context.ApplicationEventPublisher eventos;
 
     private final TurmaRepository turmaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -541,6 +543,7 @@ public class TurmaService {
 
         vinculo.setStatus(novoStatus);
         alunoTurmaRepository.save(vinculo);
+        if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Direto("APROVADO".equals(novoStatus)?"SOLICITACAO_APROVADA":"SOLICITACAO_RECUSADA","SOLICITACAO_VAGA",vinculoId,vinculo.getAluno().getId(),null,"VAGA:"+vinculoId+":"+UUID.randomUUID()));
     }
 
     private void validarCapacidade(Integer capacidade) {

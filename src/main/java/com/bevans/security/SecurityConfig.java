@@ -56,7 +56,7 @@ public class SecurityConfig {
                     );
                     config.setAllowedHeaders(
                             List.of("Authorization", "Content-Type",
-                                    "Accept", "Bypass-Tunnel-Reminder", "X-Convite")
+                                    "Accept", "Bypass-Tunnel-Reminder", "X-Convite", "X-Inscricao")
                     );
                     return config;
                 });
@@ -99,6 +99,9 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/health").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/convite").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST,"/publico/excursoes/credenciais","/publico/excursoes/inscricoes").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/inscricao").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.DELETE,"/publico/excursoes/inscricao").permitAll()
                 .anyRequest().authenticated())
             .addFilterBefore(firebaseFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(new LimiteConvitesFilter(java.time.Clock.systemUTC()),FirebaseAuthenticationFilter.class);

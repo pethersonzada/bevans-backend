@@ -15,7 +15,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class ConviteExcursaoService {
     private final ConviteExcursaoRepository convites;private final ExcursaoRepository excursoes;
     private final UsuarioRepository usuarios;private final ParadaExcursaoRepository paradas;private final EntityManager em;private final Clock clock;
-    public ConviteExcursaoService(ConviteExcursaoRepository c,ExcursaoRepository e,UsuarioRepository u,ParadaExcursaoRepository p,EntityManager em,Clock clock){convites=c;excursoes=e;usuarios=u;paradas=p;this.em=em;this.clock=clock;}
+    private final InscricaoExcursaoRepository inscricoes;
+    public ConviteExcursaoService(ConviteExcursaoRepository c,ExcursaoRepository e,UsuarioRepository u,ParadaExcursaoRepository p,EntityManager em,Clock clock,InscricaoExcursaoRepository inscricoes){convites=c;excursoes=e;usuarios=u;paradas=p;this.em=em;this.clock=clock;this.inscricoes=inscricoes;}
     private ResponseStatusException indisponivel(){return new ResponseStatusException(HttpStatus.NOT_FOUND,"Convite indisponível.");}
     private Excursao dono(Long id,String uid,boolean lock){
         Usuario u=usuarios.findByFirebaseUid(uid).filter(v->"MOTORISTA".equals(v.getTipo())).orElseThrow(()->new AccessDeniedException("Organizador inválido."));
@@ -39,7 +40,7 @@ public class ConviteExcursaoService {
         ConviteExcursao c=validar(token);Excursao e=c.getExcursao();
         var pontos=paradas.findByExcursaoIdOrderByOrdemAscIdAsc(e.getId()).stream().filter(ParadaExcursao::isAtiva)
                 .map(p->new ParadaExcursaoDTO(p.getId(),p.getOrdem(),p.getNome(),p.getLatitude(),p.getLongitude(),p.getHorario(),p.getInstrucoes())).toList();
-        return new ExcursaoConvitePublicoDTO(e.getTitulo(),e.getDestinoNome(),e.getDestinoLatitude(),e.getDestinoLongitude(),e.getPartidaEm(),e.getRetornoEm(),e.getModoColeta(),pontos);
+        return new ExcursaoConvitePublicoDTO(e.getTitulo(),e.getDestinoNome(),e.getDestinoLatitude(),e.getDestinoLongitude(),e.getPartidaEm(),e.getRetornoEm(),e.getModoColeta(),pontos,Math.max(0,e.getCapacidade()-inscricoes.ocupacao(e.getId(),clock.instant())));
     }
     @Transactional(readOnly=true) public ConviteExcursao validar(String token){
         String hash;try{hash=TokensExcursao.hash(token);}catch(IllegalArgumentException ex){throw indisponivel();}

@@ -47,6 +47,6 @@ public class Excursao {
     public void configurar(ExcursaoRequest d){
         titulo=d.titulo().trim();destinoNome=d.destinoNome().trim();destinoLatitude=d.destinoLatitude();destinoLongitude=d.destinoLongitude();
         origemNome=d.origemNome()==null?null:d.origemNome().trim();origemLatitude=d.origemLatitude();origemLongitude=d.origemLongitude();
-        partidaEm=d.partidaEm();retornoEm=d.retornoEm();capacidade=d.capacidade();
+        partidaEm=d.partidaEm().truncatedTo(java.time.temporal.ChronoUnit.MICROS);retornoEm=d.retornoEm()==null?null:d.retornoEm().truncatedTo(java.time.temporal.ChronoUnit.MICROS);capacidade=d.capacidade();
     }
 }

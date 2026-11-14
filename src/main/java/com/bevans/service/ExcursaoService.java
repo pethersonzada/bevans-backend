@@ -20,7 +20,8 @@ public class ExcursaoService {
     private final EntityManager em;
     private final Clock clock;
     private final ParadaExcursaoRepository paradas;
-    public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock,ParadaExcursaoRepository paradas){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;this.paradas=paradas;}
+    private final InscricaoExcursaoRepository inscricoes;
+    public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock,ParadaExcursaoRepository paradas,InscricaoExcursaoRepository inscricoes){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;this.paradas=paradas;this.inscricoes=inscricoes;}
     private Usuario motorista(String uid){
         Usuario u=usuarios.findByFirebaseUid(uid).orElseThrow(()->new AccessDeniedException("Perfil não encontrado."));
         if(!"MOTORISTA".equals(u.getTipo()))throw new AccessDeniedException("Somente motoristas gerenciam excursões.");return u;
@@ -47,19 +48,29 @@ public class ExcursaoService {
         Usuario u=motorista(uid);validar(d);Excursao e=new Excursao();e.setOrganizador(u);e.setCriadaEm(clock.instant());e.configurar(d);return dto(excursoes.saveAndFlush(e));
     }
     @Transactional public ExcursaoDTO atualizar(Long id,String uid,ExcursaoRequest d){
-        Excursao e=propria(id,uid,true);editavel(e);validar(d);versao(e,d.versao());e.configurar(d);return dto(excursoes.saveAndFlush(e));
+        Excursao e=propria(id,uid,true);editavel(e);validar(d);versao(e,d.versao());
+        long ocupadas=inscricoes.ocupacao(id,clock.instant());
+        if(d.capacidade()<ocupadas)throw new ResponseStatusException(HttpStatus.CONFLICT,"Capacidade inferior às vagas reservadas e confirmadas.");
+        if(ocupadas>0&&(!Objects.equals(e.getDestinoNome(),d.destinoNome().trim())||!Objects.equals(e.getDestinoLatitude(),d.destinoLatitude())
+                ||!Objects.equals(e.getDestinoLongitude(),d.destinoLongitude())||!Objects.equals(e.getOrigemNome(),d.origemNome()==null?null:d.origemNome().trim())
+                ||!Objects.equals(e.getOrigemLatitude(),d.origemLatitude())||!Objects.equals(e.getOrigemLongitude(),d.origemLongitude())
+                ||!Objects.equals(e.getPartidaEm(),d.partidaEm().truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+                ||!Objects.equals(e.getRetornoEm(),d.retornoEm()==null?null:d.retornoEm().truncatedTo(java.time.temporal.ChronoUnit.MICROS))))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Há inscrições ativas: preserve percurso e horários.");
+        e.configurar(d);return dto(excursoes.saveAndFlush(e));
     }
     @Transactional public ExcursaoDTO publicar(Long id,String uid,Long versao){
         Excursao e=propria(id,uid,true);editavel(e);versao(e,versao);e.setEstado(EstadoExcursao.PUBLICADA);return dto(excursoes.saveAndFlush(e));
     }
     @Transactional public ExcursaoDTO cancelar(Long id,String uid){
         Excursao e=propria(id,uid,true);if(e.getEstado()==EstadoExcursao.CONCLUIDA)throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão concluída.");
-        e.setEstado(EstadoExcursao.CANCELADA);return dto(excursoes.saveAndFlush(e));
+        e.setEstado(EstadoExcursao.CANCELADA);inscricoes.cancelarAtivas(id);return dto(excursoes.saveAndFlush(e));
     }
     @Transactional public ExcursaoDTO configurarColeta(Long id,String uid,ColetaExcursaoRequest d){
         Excursao e=propria(id,uid,true);editavel(e);
         if(d==null||d.modo()==null||d.paradas()==null)throw new IllegalArgumentException("Informe modo e lista de paradas.");
         versao(e,d.versao());int n=d.paradas().size();
+        if(inscricoes.ocupacao(id,clock.instant())>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Há inscrições ativas: não altere modo ou paradas.");
         if(n>50||(d.modo()==ModoColetaExcursao.PORTA_A_PORTA&&n!=0)
                 ||(d.modo()==ModoColetaExcursao.PARADA_UNICA&&n!=1)||(d.modo()==ModoColetaExcursao.MULTIPLAS_PARADAS&&n<2))
             throw new IllegalArgumentException("Modo incompatível com a quantidade de paradas (máximo 50).");

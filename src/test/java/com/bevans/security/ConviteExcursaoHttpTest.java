@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ConviteExcursaoHttpTest extends BaseAutorizacaoHttpTest {
     @MockBean ConviteExcursaoService service;
     @Test void convitePublicoNaoExigeFirebaseENaoIncluiDadosPrivados() throws Exception {
-        when(service.consultar("token-teste")).thenReturn(new ExcursaoConvitePublicoDTO("Evento","Destino",-8,-35,Instant.parse("2030-01-01T12:00:00Z"),null,ModoColetaExcursao.PORTA_A_PORTA,List.of()));
+        when(service.consultar("token-teste")).thenReturn(new ExcursaoConvitePublicoDTO("Evento","Destino",-8,-35,Instant.parse("2030-01-01T12:00:00Z"),null,ModoColetaExcursao.PORTA_A_PORTA,List.of(),12));
         mvc.perform(get("/publico/excursoes/convite").header("X-Convite","token-teste"))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
                 .andExpect(jsonPath("$.titulo").value("Evento")).andExpect(jsonPath("$.organizador").doesNotExist())

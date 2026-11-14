@@ -32,7 +32,7 @@ Scripts 001–008 não foram alterados. Aplicar 009 uma vez com registro de exec
 antes de iniciar a aplicação que usa Hibernate validate. Rollback da aplicação
 mantém tabelas e dados; não executar DROP.
 
-Inscrições ainda não existem nesta etapa; a #30 deve bloquear mudanças de modo,
-paradas/horários/endereço quando houver reserva ativa e impedir capacidade abaixo
-da ocupação. Planejamento/OR-Tools, execução e controle físico são etapas #31/#46.
+O incremento 011 da #30 bloqueia mudanças de modo, paradas/horários/endereço
+quando há reserva ativa e impede capacidade abaixo da ocupação. Consulte
+`excursoes-inscricoes-api.md`. Planejamento/OR-Tools, execução e controle físico são etapas #31/#46.
 Não interpretar definição de coleta como inscrição ou embarque confirmado.

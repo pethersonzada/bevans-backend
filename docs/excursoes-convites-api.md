@@ -36,7 +36,6 @@ Aplicar migração incremental 010 uma vez após 009, com rastreabilidade. Scrip
 antigos preservados. Hibernate continua validate por padrão; não usar update
 para substituir constraints/índices. Rollback da aplicação preserva dados.
 
-Esta etapa entrega convites e consulta, não reserva vagas. Cadastro, credencial
-individual, controle concorrente de capacidade e confirmação pertencem ao
-incremento seguinte da #30. Link de convite não concede acesso administrativo
-ou localização privada. Não declarar o fluxo de inscrição concluído ainda.
+Cadastro, credencial individual, controle concorrente de capacidade e confirmação
+foram adicionados no incremento 011; consultar `excursoes-inscricoes-api.md`.
+Link de convite não concede acesso administrativo ou localização privada.

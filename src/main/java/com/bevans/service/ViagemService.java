@@ -20,6 +20,9 @@ public class ViagemService {
     private final ViagemRepository viagemRepository;
     private final TurmaRepository turmaRepository;
     private final com.bevans.repository.PosicaoViagemRepository posicoes;
+    private org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> coletas;
+    @org.springframework.beans.factory.annotation.Autowired
+    public ViagemService(ViagemRepository v,TurmaRepository t,com.bevans.repository.PosicaoViagemRepository p,org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> c){this(v,t,p);coletas=c;}
 
     public ViagemService(ViagemRepository viagemRepository, TurmaRepository turmaRepository,com.bevans.repository.PosicaoViagemRepository posicoes) {
         this.viagemRepository = viagemRepository;
@@ -37,6 +40,7 @@ public class ViagemService {
         if (viagemAtiva.isPresent()) {
             throw new ConflitoException("Já existe uma rota em andamento exclusivamente para esta turma.");
         }
+        if(coletas!=null&&coletas.getIfAvailable()!=null)coletas.getObject().validarInicio(turmaId,sentido);
 
         Viagem novaViagem = new Viagem();
         novaViagem.setTurma(turma);

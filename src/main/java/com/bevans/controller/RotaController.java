@@ -52,6 +52,8 @@ public class RotaController {
     private final TurmaRepository turmaRepository;
     private final RotaService rotaService;
     private final ViagemService viagemService;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.bevans.service.ColetaPrivadaService coletaPrivada;
 
     public RotaController(
             PresencaRepository presencaRepository,
@@ -172,6 +174,7 @@ public class RotaController {
         if (!passageiroAprovado(usuarioId, turmaId)) {
             throw new AccessDeniedException("Passageiro não aprovado nesta turma.");
         }
+        if(coletaPrivada!=null)coletaPrivada.prepararPresenca(turmaId,usuarioId,novoStatus);
 
         Presenca presenca = presencaRepository
                 .findByUsuarioIdAndTurmaIdAndData(
@@ -197,11 +200,13 @@ public class RotaController {
                 "VOLTA".equals(novoStatus)
                 || "AMBOS".equals(novoStatus);
 
-        if (temIda && enderecoIda == null) {
+        boolean paradaIda=coletaPrivada!=null&&coletaPrivada.usaParadas(turmaId,"IDA");
+        boolean paradaVolta=coletaPrivada!=null&&coletaPrivada.usaParadas(turmaId,"VOLTA");
+        if (temIda && enderecoIda == null && !paradaIda) {
             throw new IllegalArgumentException("Selecione o endereço da ida.");
         }
 
-        if (temVolta && enderecoVolta == null) {
+        if (temVolta && enderecoVolta == null && !paradaVolta) {
             throw new IllegalArgumentException("Selecione o endereço da volta.");
         }
 
@@ -209,14 +214,14 @@ public class RotaController {
         Endereco volta = null;
 
         try {
-            if (temIda) {
+            if (temIda && enderecoIda!=null) {
                 ida = buscarEnderecoDoUsuario(
                         enderecoIda,
                         usuarioId
                 );
             }
 
-            if (temVolta) {
+            if (temVolta && enderecoVolta!=null) {
                 volta = buscarEnderecoDoUsuario(
                         enderecoVolta,
                         usuarioId
@@ -246,13 +251,11 @@ public class RotaController {
         }
 
         presenca.setStatus(novoStatus);
-        presenca.setEnderecoIda(ida);
-        presenca.setEnderecoVolta(volta);
+        if(ida!=null)presenca.setEnderecoIda(ida);
+        if(volta!=null)presenca.setEnderecoVolta(volta);
 
         // Mantém compatibilidade com consumidores antigos.
-        presenca.setEndereco(
-                ida != null ? ida : volta
-        );
+        if(ida!=null||volta!=null)presenca.setEndereco(ida!=null?ida:volta);
 
         presencaRepository.save(presenca);
 

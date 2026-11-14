@@ -14,6 +14,8 @@ import com.bevans.model.Presenca;
 
 public interface PresencaRepository
         extends JpaRepository<Presenca, Long> {
+    @Query("select count(p)>0 from Presenca p where p.turma.id=:id and p.data>=:data and upper(p.status) not in ('NAO_VOU','LIMPAR')")
+    boolean possuiPlanejamento(@Param("id")Long id,@Param("data")LocalDate data);
 
     @Query("""
         SELECT p FROM Presenca p

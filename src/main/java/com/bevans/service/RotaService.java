@@ -33,6 +33,9 @@ public class RotaService {
 
     private final PresencaRepository presencaRepository;
     private final TurmaRepository turmaRepository;
+    private org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> coletas;
+    @org.springframework.beans.factory.annotation.Autowired
+    public RotaService(PresencaRepository p,TurmaRepository t,EnderecoRepository e,org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> c){this(p,t,e);coletas=c;}
 
     static {
         Loader.loadNativeLibraries();
@@ -165,6 +168,9 @@ public class RotaService {
 
         boolean isVolta =
                 sentido.equalsIgnoreCase("VOLTA");
+        var coleta=coletas==null?null:coletas.getIfAvailable();
+        if(coleta!=null&&coleta.usaParadas(turmaId,isVolta?"VOLTA":"IDA"))return CompletableFuture.completedFuture(
+                coleta.roteiroSistema(turmaId,isVolta?"VOLTA":"IDA",false).stream().flatMap(p->p.passageiros().stream()).toList());
 
         // 1. Buscar a turma.
 

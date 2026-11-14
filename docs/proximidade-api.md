@@ -21,3 +21,12 @@ Uma chave por operação/registro/tipo limita cada aviso a uma ocorrência no se
 Motorista recebe `PASSAGEIROS_AGUARDANDO` no início quando aplicável e `TODOS_EMBARCARAM` uma vez quando todos os esperados têm estado EMBARCADO ou DESEMBARCADO. Não se infere presença pelo GPS. Ausência explícita e confirmações feitas por passageiros continuam usando os eventos operacionais existentes, sem notificar o motorista por cada alerta de proximidade de passageiros.
 
 Mensagens push permanecem genéricas, sem endereços, nomes ou coordenadas. Participante sem aplicativo recebe o aviso no feed individual, sem dispositivo Firebase presumido. Validação local não substitui teste real de notificações e localização em segundo plano nos aplicativos.
+
+## Consultas em lote
+
+A avaliação usa projeção escalar do snapshot e uma consulta de IDs aprovados,
+sem carregar perfis de cada passageiro. As chaves já emitidas são consultadas em
+lote. Regressão reproduzida antes da correção: 21 consultas para nove passageiros;
+o teste `consultaDeProximidadeNaoCarregaPerfilOuMatriculaPorPassageiro` limita a
+avaliação a seis consultas, também executado no PostgreSQL isolado. Ordem,
+destinatários, TTL e revalidação permanecem sob as regras acima.

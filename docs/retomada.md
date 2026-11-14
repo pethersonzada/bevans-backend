@@ -1,5 +1,105 @@
 # Estado de retomada — 14/11/2026
 
+## Estado vigente — responsáveis, contato protegido e preparação de produção
+
+Esta seção substitui o estado vigente antigo abaixo, preservado como histórico.
+Pedido executado exclusivamente em `C:\dev\bevans-backend`, na **main**.
+Início: árvore limpa, HEAD `2934022`, fetch e pull ff-only sem alterações,
+zero commits à frente/atrás. CI remoto desse commit confirmado como success:
+[run 43556163107](https://github.com/pethersonzada/bevans-backend/actions/runs/43556163107).
+As 24 issues então abertas e seus comentários foram consultados diretamente;
+criadas #49–51 para falhas comprovadas. Nenhuma issue fechada, nenhum frontend
+alterado, push, deploy, credencial real ou banco de produção acessado.
+
+### Commits locais desta rodada
+
+| Commit | Entrega |
+|---|---|
+| `43461a7` | #26: vínculos, convite de uso único, consentimento versionado, revogação, auditoria e acesso operacional restrito |
+| `365ee58` | #36: contato comercial com consentimento, validação BR e autorização; remoção de dados pessoais de perfis aninhados |
+| `f46b258` | #7: OpenAPI real, contratos/erros/credenciais/SSE e Swagger desabilitado por padrão |
+| `aff6b2b` | #51: início da viagem usa o mesmo Clock da operação e GPS |
+| `db4603f` | #49: associação legada exige email Firebase verificado; UID único; tokens revogados e indisponibilidade do provedor |
+| `4219116` | #50: exclusão local e reserva de UID atômicas, tarefa remota só após commit, retries/lease e flags desativadas |
+| `64f25b0` | #47/#27: projeções e consultas em lote, regressão N+1 protegida por teste |
+| `c2987c4` | #44: alias legado de endereço usa a mesma validação de coordenadas |
+| `ef66a23` | #6/#27: logs inesperados sem mensagem/stack privados e correlação de erro |
+
+O commit documental seguinte contém esta retomada e os procedimentos de produção.
+Após ele: **main 10 commits à frente e zero atrás de origin/main consultada**, sem
+alterações pendentes. Nenhum push; não há CI remoto destes commits locais.
+
+### Validação executada com Java 21.0.12.1 / PostgreSQL 16
+
+- Baseline padrão reexecutada: **282 aprovados**. Referência PG anterior: 103.
+- Final `mvn clean verify`: **316 testes**, zero falhas/erros/ignorados.
+  Log local ignorado: `.validation-logs/producao-final-clean-verify.log`.
+- Final `mvn -Ppostgres-validation verify`: **122 execuções**, zero
+  falhas/erros/ignorados. Log: `.validation-logs/producao-final-postgres.log`.
+  As execuções PG incluem testes herdados dos serviços, não são 122 casos únicos
+  adicionais à suíte padrão. Upgrade histórico + migrações + Hibernate validate,
+  autorização, concorrência, capacidade, persistência e OR-Tools passaram.
+- Migrações novas **017–020** aplicadas somente em schemas isolados. 019 também
+  testada com UID duplicado: falha e rollback preservam IDs/linhas. 001–016
+  permanecem byte a byte sem diff em relação a `2934022`.
+- Nenhum teste removido ou desabilitado. Mocks Firebase atualizados para a
+  verificação com revogação; falhas reproduzidas foram corrigidas, não ignoradas.
+- Regressões reproduzidas: email não verificado vinculava perfil legado; Firebase
+  era chamado antes de falha FK local; Clock divergente quebrava GPS após meio-dia;
+  alias aceitava latitude 91; exceção registrava conteúdo privado; proximidade
+  realizava 21 queries para nove passageiros. Testes finais protegem esses casos.
+- `git diff --check` aprovado; revisão dos caminhos versionados não encontrou
+  frontend, target, .env, chaves privadas ou service account. Teste de fronteira
+  do backend também passou. Workflow existente preservado (push main, PR e manual).
+- PostgreSQL desta rodada: container descartável `bevans-producao-validation`,
+  bind somente `127.0.0.1:55435`, banco exclusivo `bevans_validation`. Container
+  encerrado ao concluir; não parar Docker Desktop nem outros containers.
+
+### Backlog real e bloqueios de aceite
+
+| Issues | Estado nesta rodada / próximo aceite |
+|---|---|
+| #26 | Infraestrutura segura implementada e testada. Verificador padrão **nega** ativação; identidade/responsabilidade legal e processo de prova pendentes. Consentimento técnico não é comprovação jurídica. |
+| #36 | Backend implementado/testado. Contato somente para APROVADO/CONFIRMADA; telefone pessoal não é reutilizado. Aceite dos clientes pendente. |
+| #7 | Documento OpenAPI gerado e exercitado localmente; dev/produção testados, sem token real. Revisão/consumo dos clientes e CI após push pendentes. |
+| #6/#27 | Suítes ampliadas, IDOR/concorrência/rollback/privacidade/isolamento validados. Organizações ainda não existem, portanto nenhum isolamento organizacional é alegado. |
+| #44 | Rascunhos e coordenadas existentes preservados e testados; corrigido bypass no alias de endereço. UX mobile/mapa ainda requer aceite no repositório próprio. |
+| #28/#29/#30/#31 | Backend de excursões já existente preservado; inscrições, vagas, execução, OR-Tools, embarques e GPS revalidados. Integração web/mobile pendente. |
+| #32 | Testes HTTP/serviços/PG existentes passaram; demo completa dos três repositórios e aparelhos **não executada**. Manter aberta. |
+| #33/#34/#35/#39/#40/#42/#43 | Publicação FIXA/FLEXÍVEL, paradas, vagas/solicitações, catálogo/filtros e favoritos existentes passaram na regressão. Não reimplementados. Aceite integrado dos clientes pendente. |
+| #41/#46/#47/#48 | GPS/SSE, operação, outbox/FCM e coleta privada existentes preservados. Corrigidos Clock e N+1; fila/leases/retries/deduplicação/revogação/TTL e isolamento testados. FCM real, segundo plano, proxy e aparelhos pendentes. |
+| #37/#38 | Somente avaliação em `papeis-futuros.md`; sem ADMIN/GESTOR ou permissão global implementados. Dependem de matriz aprovada e modelo organizacional. |
+| #49 | Falha de identidade corrigida localmente; publicação/revisão pendentes. |
+| #50 | Exclusão atômica/outbox implementadas; contas com histórico continuam bloqueadas. Política de retenção e ativação remota autorizada pendentes. |
+| #51 | Clock corrigido, regressão operacional validada em H2 e PostgreSQL; publicação/revisão pendentes. |
+
+### Contratos que os clientes precisam revisar
+
+`RESPONSAVEL` pode cadastrar perfil, mas só acessa dependente com prova confiável
+e consentimentos atuais; nenhum parâmetro do cliente ativa a prova. Perfis
+aninhados de Usuario agora expõem somente id/nome/tipo; o próprio perfil mantém
+campos completos via PerfilUsuarioDTO. Usar API de contato consentido, sem ler
+telefone pessoal do motorista aninhado. DELETE de conta passa a **202**, com
+remoção remota pendente; com relacionamentos retorna 409. Revogação Firebase é
+verificada, indisponibilidade transitória retorna 503, token inválido 401.
+
+Contratos novos: `responsaveis-api.md`, `contato-motorista-api.md`,
+`identidade-firebase-api.md`, `exclusao-contas-api.md` e `openapi-api.md`.
+Procedimento e recuperação: `preparacao-producao.md`. Antes de deploy, inventariar
+schema real com autorização, restaurar backup em isolamento, ensaiar migrações
+faltantes, homologar Firebase/OR-Tools/SSE e revisar configuração. Worker/push FCM
+e ambos os componentes de exclusão remota permanecem desativados por padrão.
+
+### Próximo passo exato
+
+Revisar os dez commits locais e contratos; o usuário decide o push. Após isso,
+acompanhar CI e integração frontend/webapp sem escrever nesses repositórios
+nesta tarefa. Definir verificação confiável de responsabilidade e retenção de
+contas antes de ativar esses fluxos; validar FCM/GPS/SSE em homologação autorizada.
+Não reiniciar auditoria, recriar backend existente nem afirmar produção pronta.
+
+## Histórico da rodada anterior
+
 ## Estado vigente — coleta privada, controle operacional, notificações e GPS
 
 Continuado o pedido anexado a partir de `e3665c0`, na **main** limpa. Executados

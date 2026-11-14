@@ -33,7 +33,7 @@ Authorization: Bearer <FIREBASE_ID_TOKEN>
 | `POST` | `/usuarios/cadastrar` | Registra o perfil do usuário no banco relacional após autenticação no Firebase. |
 | `GET` | `/usuarios/por-uid/{uid}` | Retorna as informações cadastrais do usuário filtradas por UID. |
 | `GET` | `/usuarios/passageiros` | Lista todos los passageiros vinculados e seus respectivos status de presença. |
-| `DELETE` | `/usuarios/{id}` | Remove o registro do usuário (exclusão de conta). |
+| `DELETE` | `/usuarios/{id}` | Própria conta sem vínculos: 202 com tarefa remota pendente; histórico vinculado bloqueia com 409. |
 
 ### 3.2 Turmas e Vínculos
 | Método | Endpoint | Descrição |
@@ -50,8 +50,8 @@ Authorization: Bearer <FIREBASE_ID_TOKEN>
 | `GET` | `/rota/status-atual?turmaId=` | Identifica se há viagem em andamento e o sentido (`IDA` / `VOLTA`). |
 | `GET` | `/rota/otimizar?sentido=&turmaId=` | Executa o algoritmo de ordenação de paradas com base nas confirmações. |
 | `POST` | `/rota/iniciar` | Inicializa o ciclo de viagem para a turma informada. |
-| `POST` | `/rota/localizacao-van` | Persiste a coordenada geográfica atual da van enviada pelo motorista (~2s). |
-| `GET` | `/rota/localizacao-van` | Fornece a posição em tempo real para os clientes (radar dos passageiros). |
+| `POST` | `/rota/localizacao-van` | Legado desativado (410); usar `PUT /viagens/{id}/localizacao`. |
+| `GET` | `/rota/localizacao-van` | Legado desativado (410); usar `GET /viagens/{id}/localizacao` ou SSE autenticado. |
 | `POST` | `/rota/confirmar?usuarioId=&status=&enderecoId=` | Atualiza a intenção de presença diária do passageiro. |
 | `POST` | `/rota/encerrar` | Encerra formalmente o ciclo de viagem ativo. |
 
@@ -63,15 +63,14 @@ Authorization: Bearer <FIREBASE_ID_TOKEN>
 * Banco de Dados PostgreSQL 14+.
 * Conta Google Firebase configurada com Firebase Admin SDK.
 
-### 4.2 Variáveis de Ambiente (`application.yml` / `.env`)
-```env
-SERVER_PORT=8080
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/bevans_db
-SPRING_DATASOURCE_USERNAME=postgres
-SPRING_DATASOURCE_PASSWORD=sua_senha
-FIREBASE_CONFIG_PATH=classpath:firebase-service-account.json
-MAPBOX_SECRET_TOKEN=sk.xxxxxxxxxxxx
-```
+### 4.2 Configuração do ambiente
+
+`application.properties` exige `DATABASE_URL`, `DATABASE_USERNAME` e
+`DATABASE_PASSWORD`; o padrão de `HIBERNATE_DDL_AUTO` é `validate`.
+Configurar `app.firebase.credentials-path` com arquivo externo protegido, nunca
+versionado. Arquivo `.env` não é carregado automaticamente pelo Spring Boot.
+Consultar [preparação de produção](docs/preparacao-producao.md) para flags,
+backup, inventário de migrações e validação de SSE/FCM antes de implantação.
 
 ## Contratos e validação incremental
 
@@ -88,6 +87,13 @@ MAPBOX_SECRET_TOKEN=sk.xxxxxxxxxxxx
 - [Central de notificações e dispositivos](docs/notificacoes-api.md)
 - [GPS de execuções de excursões](docs/excursoes-gps-api.md)
 - [Alertas de proximidade e resumos operacionais](docs/proximidade-api.md)
+- [Responsáveis e consentimento verificável](docs/responsaveis-api.md)
+- [Contato comercial protegido](docs/contato-motorista-api.md)
+- [Identidade Firebase e perfis legados](docs/identidade-firebase-api.md)
+- [Exclusão transacional de contas](docs/exclusao-contas-api.md)
+- [OpenAPI e ativação segura](docs/openapi-api.md)
+- [Preparação de produção](docs/preparacao-producao.md)
+- [Avaliação futura de ADMIN/GESTOR](docs/papeis-futuros.md)
 
 O cadastro de turma aceita rascunho sem percurso e exige `capacidade` inteira
 positiva. Origem/destino são confirmados por coordenadas no mapa, em PUTs

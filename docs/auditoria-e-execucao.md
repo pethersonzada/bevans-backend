@@ -1,5 +1,27 @@
 # Auditoria e execução — 14/11/2026
 
+## Atualização mais recente — pendências e preparação de produção
+
+Retomada da main limpa e sincronizada em `2934022`, sem repetir auditoria.
+Consultadas as 24 issues abertas e comentários; implementadas infraestrutura de
+responsáveis (#26), contato comercial (#36) e OpenAPI (#7). Corrigidas falhas
+reproduzidas de identidade legada (#49), exclusão parcial (#50), Clock/GPS (#51),
+alias de endereço (#44), logs privados e N+1 (#6/#27/#47). Migrações 017–020
+validadas; 001–016 preservadas. ADMIN/GESTOR somente documentados.
+
+Resultado final Java 21: **316 testes padrão e 122 execuções PostgreSQL 16**,
+zero falhas/erros/ignorados, comparados a 282/103 históricos. Sem testes removidos.
+Logs finais em `.validation-logs/producao-final-clean-verify.log` e
+`.validation-logs/producao-final-postgres.log`, ignorados pelo Git. CI remoto de
+2934022 confirmado como success; commits novos apenas locais, sem CI remoto.
+
+Não houve push/deploy/acesso a produção/FCM real. Responsabilidade legal,
+retenção de contas, clientes mobile/web e aparelhos reais continuam pendentes.
+Estado completo, hashes e classificação por issue em [retomada](retomada.md);
+procedimento autorizado futuro em [preparação](preparacao-producao.md).
+
+## Histórico anterior
+
 ## Atualização vigente — implementação incremental, sem nova auditoria
 
 Continuado a partir da main `e3665c0`, preservando os seis commits locais de

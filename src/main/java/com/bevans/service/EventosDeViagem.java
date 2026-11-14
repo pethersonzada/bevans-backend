@@ -5,4 +5,5 @@ public final class EventosDeViagem {
     public record Excursao(String tipo,Long id){}
     public record Operacao(Long operacaoId,Long registroId,String tipo,String chave){}
     public record Direto(String tipo,String contextoTipo,Long contextoId,Long usuarioId,Long inscricaoId,String chave){}
+    public record Gps(com.bevans.model.TipoOperacao tipo,Long id){}
 }

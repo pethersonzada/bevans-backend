@@ -18,7 +18,12 @@ import static org.junit.jupiter.api.Assertions.*;
  "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect","spring.jpa.hibernate.ddl-auto=create-drop","spring.sql.init.mode=never"})
 @Import(OperacaoIntegrationTest.Tempo.class)
 class OperacaoIntegrationTest {
-    @TestConfiguration static class Tempo {@Bean @Primary Clock testeClock(){var z=ZoneId.of("America/Sao_Paulo");return Clock.fixed(LocalDate.now(z).atTime(12,0).atZone(z).toInstant(),z);}}
+    static class Relogio extends Clock {
+        final ZoneId zona=ZoneId.of("America/Sao_Paulo");final Instant inicial=LocalDate.now(zona).atTime(12,0).atZone(zona).toInstant();volatile Instant agora=inicial;
+        public Instant instant(){return agora;}public ZoneId getZone(){return zona;}public Clock withZone(ZoneId z){return Clock.fixed(agora,z);}
+    }
+    @TestConfiguration static class Tempo {@Bean @Primary Clock testeClock(){return new Relogio();}}
+    @org.junit.jupiter.api.BeforeEach void reiniciarRelogio(){((Relogio)clock).agora=((Relogio)clock).inicial;}
     @Autowired OperacaoService service;@Autowired ViagemService viagens;@Autowired ViagemRepository viagemRepo;
     @Autowired UsuarioRepository usuarios;@Autowired TurmaRepository turmas;@Autowired AlunoTurmaRepository vinculos;
     @Autowired EnderecoRepository enderecos;@Autowired PresencaRepository presencas;@Autowired Clock clock;
@@ -34,6 +39,7 @@ class OperacaoIntegrationTest {
     @Autowired NotificacaoInscricaoService avisosWeb;
     @Autowired PosicaoExcursaoService gpsExcursao;@Autowired PosicaoExecucaoExcursaoRepository posicoesExcursao;
     @Autowired CredencialInscricaoExcursaoRepository credenciaisInscricao;
+    @Autowired PosicaoViagemService gpsViagem;@Autowired ContextoProximidadeService contextoProximidade;
     private record Cenario(Turma turma,Usuario dono,Usuario aluno){}
     private Usuario usuario(String tipo){String id=UUID.randomUUID().toString();var u=new Usuario();u.setNome(id);u.setTelefone(id);u.setEmail(id+"@test.invalid");u.setFirebaseUid(id);u.setTipo(tipo);return usuarios.save(u);}
     private Cenario cenario(){
@@ -57,7 +63,7 @@ class OperacaoIntegrationTest {
         var r=service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
         service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));distribuir();
         assertEquals(2,notificacoes.listar(c.aluno().getFirebaseUid(),0,20).getTotalElements());
-        assertEquals(2,notificacoes.listar(c.dono().getFirebaseUid(),0,20).getTotalElements());
+        assertEquals(4,notificacoes.listar(c.dono().getFirebaseUid(),0,20).getTotalElements());
         var vinculo=vinculos.findByTurmaIdAndAlunoId(c.turma().getId(),c.aluno().getId()).orElseThrow();vinculo.setStatus("REMOVIDO");vinculos.save(vinculo);
         service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),c.dono().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,r.versao()));distribuir();
         assertEquals(2,notificacoes.listar(c.aluno().getFirebaseUid(),0,20).getTotalElements());
@@ -128,7 +134,7 @@ class OperacaoIntegrationTest {
         assertEquals(posicao.recebidoEm(),gpsExcursao.enviar(x.id(),dono.getFirebaseUid(),amostra).recebidoEm());
         assertTrue(posicoesExcursao.findById(x.id()).isPresent());
         assertThrows(ResponseStatusException.class,()->service.minhaWeb(x.id(),convite.token()));
-        distribuir();assertEquals(2,avisosWeb.listar(token,0,20).getTotalElements());
+        distribuir();assertEquals(3,avisosWeb.listar(token,0,20).getTotalElements());
         assertThrows(ResponseStatusException.class,()->avisosWeb.listar(convite.token(),0,20));
         var aviso=avisosWeb.listar(token,0,20).getContent().getFirst();avisosWeb.ler(token,aviso.id());assertNotNull(avisosWeb.listar(token,0,20).getContent().getFirst().lidaEm());
         r=service.alterarDono(TipoOperacao.EXCURSAO,x.id(),r.id(),dono.getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
@@ -146,6 +152,9 @@ class OperacaoIntegrationTest {
             var pendente=usuario("PASSAGEIRO");embarques.solicitar(r.id(),pendente.getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",p.id(),null,null,null,null,null));
             Long id=iniciar(c,"IDA");var painel=service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid());assertEquals(1,painel.contadores().esperados());assertEquals(p.id(),painel.registros().get(0).paradaId());
             assertThrows(AccessDeniedException.class,()->service.minha(id,pendente.getFirebaseUid()));
+            gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("publica",-8.1,-35.1,clock.instant(),5.0,null));distribuir();
+            assertTrue(notificacoes.listar(c.aluno().getFirebaseUid(),0,20).stream().anyMatch(n->n.tipo().equals("VAN_CHEGOU")));
+            assertTrue(notificacoes.listar(pendente.getFirebaseUid(),0,20).isEmpty());
         }
     }
     @Test void cancelamentoLimpaGpsEInscricaoAusenteOuExpiradaNaoPodeRastrear()throws Exception{
@@ -163,11 +172,39 @@ class OperacaoIntegrationTest {
         excursoes.cancelar(e.id(),dono.getFirebaseUid());
         assertNull(posicoesExcursao.findById(x.id()).orElseThrow().getLatitude());assertEquals("FINALIZADA",gpsExcursao.consultar(x.id(),dono.getFirebaseUid()).estado());
     }
+    @Test void proximidadeRespeitaOrdemGpsRecenteDeduplicacaoEExpiraFilaEPush(){
+        var c=cenario();var outro=usuario("PASSAGEIRO");var v=new AlunoTurma();v.setTurma(c.turma());v.setAluno(outro);v.setStatus("APROVADO");vinculos.save(v);
+        var endereco=new Endereco();endereco.setUsuario(outro);endereco.setLatitude(-8.12);endereco.setLongitude(-35.12);endereco=enderecos.save(endereco);
+        var p=new Presenca();p.setTurma(c.turma());p.setUsuario(outro);p.setData(LocalDate.now(clock));p.setStatus("IDA");p.setEnderecoIda(endereco);presencas.save(p);
+        Long id=iniciar(c,"IDA");var op=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(op.id);var proximo=rs.getFirst();var seguinte=rs.getLast();
+        distribuir();assertTrue(contextoProximidade.alertas(op.id).isEmpty());
+        var dispositivo=dispositivos.registrar(proximo.aluno.getFirebaseUid(),new NotificacaoDTO.Dispositivo(UUID.randomUUID().toString(),"token-local-"+UUID.randomUUID(),true));
+        var amostra=new PosicaoRequest("longe",proximo.latitude+0.003,proximo.longitude,clock.instant(),5.0,null);
+        gpsViagem.enviar(id,c.dono().getFirebaseUid(),amostra);long quantidade=outbox.count();gpsViagem.enviar(id,c.dono().getFirebaseUid(),amostra);assertEquals(quantidade,outbox.count());
+        assertEquals(Map.of(proximo.id,"VAN_APROXIMANDO"),contextoProximidade.alertas(op.id));distribuir();
+        assertTrue(notificacoes.listar(proximo.aluno.getFirebaseUid(),0,50).stream().anyMatch(n->n.tipo().equals("VAN_APROXIMANDO")));
+        assertFalse(notificacoes.listar(seguinte.aluno.getFirebaseUid(),0,50).stream().anyMatch(n->ContextoProximidadeService.TIPOS.contains(n.tipo())));
+        ((Relogio)clock).agora=clock.instant().plusSeconds(5);gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("perto",proximo.latitude+0.001,proximo.longitude,clock.instant(),5.0,null));distribuir();
+        assertTrue(notificacoes.listar(proximo.aluno.getFirebaseUid(),0,50).stream().anyMatch(n->n.tipo().equals("VOCE_E_PROXIMO")));
+        ((Relogio)clock).agora=clock.instant().plusSeconds(5);gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("chegou",proximo.latitude,proximo.longitude,clock.instant(),5.0,null));
+        assertEquals(EstadoOperacional.AGUARDANDO,registros.findById(proximo.id).orElseThrow().estado);
+        ((Relogio)clock).agora=clock.instant().plusSeconds(31);assertTrue(contextoProximidade.alertas(op.id).isEmpty());distribuir();
+        assertFalse(notificacoes.listar(proximo.aluno.getFirebaseUid(),0,50).stream().anyMatch(n->n.tipo().equals("VAN_CHEGOU")));
+        assertNull(pushes.reservar());assertTrue(entregaRepo.findAll().stream().filter(x->x.dispositivo.id.equals(dispositivo.id())).anyMatch(x->x.estado.equals("CANCELADA")));
+        gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("imprecisa",proximo.latitude,proximo.longitude,clock.instant(),100.0,null));assertTrue(contextoProximidade.alertas(op.id).isEmpty());
+        service.alterarMinha(id,proximo.aluno.getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
+        ((Relogio)clock).agora=clock.instant().plusSeconds(5);gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("seguinte",seguinte.latitude,seguinte.longitude,clock.instant(),5.0,null));
+        assertEquals(Map.of(seguinte.id,"VAN_CHEGOU"),contextoProximidade.alertas(op.id));
+        assertEquals(EstadoOperacional.EMBARCADO,registros.findById(proximo.id).orElseThrow().estado);
+        dispositivos.revogar(proximo.aluno.getFirebaseUid(),dispositivo.instalacaoId());
+    }
     @Test void coletaPrivadaUsaParadaEfetivaNoSnapshotOperacional(){
         var c=cenario();var p=presencas.findByUsuarioIdAndTurmaIdAndData(c.aluno().getId(),c.turma().getId(),LocalDate.now(clock)).orElseThrow();p.setStatus("NAO_VOU");presencas.save(p);
         var cfg=coletas.configurar(c.turma().getId(),"IDA",c.dono().getFirebaseUid(),new ColetaPrivadaRequest(ModoColetaPrivada.PARADAS_DEFINIDAS,0L,List.of(new ColetaPrivadaRequest.Parada(null,"Praça escolhida",-8.15,-35.15,null,true))));
         coletas.escolher(c.turma().getId(),"IDA",c.aluno().getFirebaseUid(),null,cfg.paradas().get(0).id(),cfg.versao());p.setStatus("IDA");presencas.save(p);
         Long id=iniciar(c,"IDA");var r=service.minha(id,c.aluno().getFirebaseUid());assertEquals(cfg.paradas().get(0).id(),r.paradaId());assertEquals(-8.15,registros.findById(r.id()).orElseThrow().latitude);
+        gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("escolhida",-8.15,-35.15,clock.instant(),5.0,null));distribuir();
+        assertTrue(notificacoes.listar(c.aluno().getFirebaseUid(),0,20).stream().anyMatch(n->n.tipo().equals("VAN_CHEGOU")));
     }
     @Test void falhaDeSnapshotDesfazInicioInteiroSemOperacaoParcial(){
         var c=cenario();var t=c.turma();t.setOrigemLatitude(null);t.setOrigemLongitude(null);turmas.save(t);long antes=operacoes.count();

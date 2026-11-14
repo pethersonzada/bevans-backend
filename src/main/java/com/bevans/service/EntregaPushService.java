@@ -12,20 +12,23 @@ public class EntregaPushService {
     private final EntregaPushRepository entregas;private final PreferenciaNotificacaoRepository preferencias;
     private final OperacaoViagemRepository operacoes;private final AlunoTurmaRepository vinculos;private final Clock clock;private final EntityManager em;
     private final EmbarqueRepository embarques;private final ExcursaoRepository excursoes;
-    public EntregaPushService(EntregaPushRepository e,PreferenciaNotificacaoRepository p,OperacaoViagemRepository o,AlunoTurmaRepository v,Clock c,EntityManager em,EmbarqueRepository embarques,ExcursaoRepository excursoes){entregas=e;preferencias=p;operacoes=o;vinculos=v;clock=c;this.em=em;this.embarques=embarques;this.excursoes=excursoes;}
+    private final ContextoProximidadeService proximidade;
+    public EntregaPushService(EntregaPushRepository e,PreferenciaNotificacaoRepository p,OperacaoViagemRepository o,AlunoTurmaRepository v,Clock c,EntityManager em,EmbarqueRepository embarques,ExcursaoRepository excursoes,ContextoProximidadeService proximidade){entregas=e;preferencias=p;operacoes=o;vinculos=v;clock=c;this.em=em;this.embarques=embarques;this.excursoes=excursoes;this.proximidade=proximidade;}
     @Transactional public Pedido reservar(){
-        var lista=entregas.pendentes(clock.instant(),PageRequest.of(0,1));if(lista.isEmpty())return null;
-        var e=lista.getFirst();em.refresh(e);
-        if(!java.util.Set.of("PENDENTE","ENVIANDO").contains(e.estado)||e.proximaTentativa.isAfter(clock.instant()))return null;
+        var lista=entregas.pendentes(clock.instant(),PageRequest.of(0,20));
+        for(var e:lista){em.refresh(e);
+        if(!java.util.Set.of("PENDENTE","ENVIANDO").contains(e.estado)||e.proximaTentativa.isAfter(clock.instant()))continue;
         var d=e.dispositivo;em.refresh(d);
-        if(!autorizada(e)){e.estado="CANCELADA";e.resultado="SEM_AUTORIZACAO";return null;}
-        if(e.tentativas>=5){e.estado="FALHA";e.resultado="LIMITE_TENTATIVAS";return null;}
+        if(!autorizada(e)){e.estado="CANCELADA";e.resultado="SEM_AUTORIZACAO";continue;}
+        if(e.tentativas>=5){e.estado="FALHA";e.resultado="LIMITE_TENTATIVAS";continue;}
         e.estado="ENVIANDO";e.tentativas++;e.proximaTentativa=clock.instant().plusSeconds(120);
         return new Pedido(e.id,e.notificacao.id,d.token,d.tokenHash,e.notificacao.titulo,e.notificacao.mensagem,e.tentativas);
+        }return null;
     }
     private boolean autorizada(EntregaPush e){
         var d=e.dispositivo;var n=e.notificacao;
         if(!d.ativo||n.usuarioId==null||!n.usuarioId.equals(d.usuarioId)||!preferencias.findById(d.usuarioId).map(p->p.pushOperacional).orElse(true))return false;
+        if(ContextoProximidadeService.TIPOS.contains(n.tipo)&&!proximidade.valido(n.operacaoId,n.registroId,n.tipo,n.criadaEm))return false;
         if(n.operacaoId==null)return switch(n.contextoTipo){
             case "SOLICITACAO_VAGA"->vinculos.findById(n.contextoId).map(v->v.getAluno().getId().equals(d.usuarioId)).orElse(false);
             case "EMBARQUE"->embarques.findById(n.contextoId).map(v->v.getAluno().getId().equals(d.usuarioId)).orElse(false);

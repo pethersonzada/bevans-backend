@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 @Service
 public class PosicaoExcursaoService {
+    @org.springframework.beans.factory.annotation.Autowired private org.springframework.context.ApplicationEventPublisher eventos;
     public record Acesso(Long credencialId,Instant expira){}
     private final ExecucaoExcursaoRepository execucoes;private final ExcursaoRepository excursoes;
     private final UsuarioRepository usuarios;private final CredencialInscricaoExcursaoRepository credenciais;
@@ -27,7 +28,7 @@ public class PosicaoExcursaoService {
         var x=execucao(id);dono(x,uid);var e=excursoes.lockById(x.getExcursao().getId()).orElseThrow(this::ausente);em.refresh(e,LockModeType.PESSIMISTIC_WRITE);em.refresh(x);dono(x,uid);
         if(x.getEstado()!=EstadoExecucaoExcursao.EM_ANDAMENTO||e.getEstado()==EstadoExcursao.CANCELADA)throw new ResponseStatusException(HttpStatus.CONFLICT,"Execução encerrada");
         var p=posicoes.findById(id).orElseGet(PosicaoExecucaoExcursao::new);var amostra=RegrasGps.validar(d,p,x.getIniciadaEm(),clock);
-        if(amostra.nova()){p.atualizar(id,amostra.dados(),amostra.recebida());posicoes.saveAndFlush(p);}
+        if(amostra.nova()){p.atualizar(id,amostra.dados(),amostra.recebida());posicoes.saveAndFlush(p);eventos.publishEvent(new EventosDeViagem.Gps(TipoOperacao.EXCURSAO,id));}
         return dto(x,p);
     }
     @Transactional(readOnly=true) public PosicaoExcursaoDTO consultar(Long id,String uid){var x=execucao(id);dono(x,uid);return dto(x,posicoes.findById(id).orElse(null));}

@@ -27,11 +27,13 @@ public class NotificacaoService {
     private final DispositivoNotificacaoRepository dispositivos;
     private final PreferenciaNotificacaoRepository preferencias;
     private final EntregaPushRepository entregas;
+    private final ContextoProximidadeService proximidade;
     public NotificacaoService(NotificacaoRepository n,OutboxNotificacaoRepository o,OperacaoViagemRepository op,
             RegistroOperacionalRepository r,UsuarioRepository u,AlunoTurmaRepository v,EntityManager em,Clock clock,
-            DispositivoNotificacaoRepository dispositivos,PreferenciaNotificacaoRepository preferencias,EntregaPushRepository entregas){
+            DispositivoNotificacaoRepository dispositivos,PreferenciaNotificacaoRepository preferencias,EntregaPushRepository entregas,ContextoProximidadeService proximidade){
         notificacoes=n;outbox=o;operacoes=op;registros=r;usuarios=u;vinculos=v;this.em=em;this.clock=clock;
         this.dispositivos=dispositivos;this.preferencias=preferencias;this.entregas=entregas;
+        this.proximidade=proximidade;
     }
     @EventListener @Transactional
     public void registrar(EventosDeViagem.Operacao evento){
@@ -40,6 +42,17 @@ public class NotificacaoService {
         o.operacaoId=evento.operacaoId();o.registroId=evento.registroId();
         if(o.registroId!=null)o.origem=registros.findById(o.registroId).orElseThrow().origem;
         o.criadaEm=clock.instant();o.proximaTentativa=o.criadaEm;outbox.save(o);
+        resumo(evento);
+    }
+    private void resumo(EventosDeViagem.Operacao evento){
+        String tipo=null;
+        if("VIAGEM_INICIADA".equals(evento.tipo())&&registros.countByOperacaoIdAndEstado(evento.operacaoId(),EstadoOperacional.AGUARDANDO)>0)tipo="PASSAGEIROS_AGUARDANDO";
+        if("EMBARQUE_CONFIRMADO".equals(evento.tipo())){
+            var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(evento.operacaoId());
+            if(!rs.isEmpty()&&rs.stream().allMatch(r->r.estado==EstadoOperacional.EMBARCADO||r.estado==EstadoOperacional.DESEMBARCADO))tipo="TODOS_EMBARCARAM";
+        }
+        if(tipo==null)return;String chave="RESUMO:"+evento.operacaoId()+":"+tipo;if(outbox.existsByChave(chave))return;
+        var o=new OutboxNotificacao();o.chave=chave;o.tipo=tipo;o.operacaoId=evento.operacaoId();o.usuarioId=operacoes.findById(o.operacaoId).orElseThrow().motorista.getId();o.criadaEm=clock.instant();o.proximaTentativa=o.criadaEm;outbox.save(o);
     }
     @EventListener @Transactional public void registrar(EventosDeViagem.Direto evento){
         if(outbox.existsByChave(evento.chave()))return;
@@ -54,12 +67,14 @@ public class NotificacaoService {
         OutboxNotificacao evento=outbox.lockById(eventoId).orElseThrow();em.refresh(evento);
         if(!"PROCESSANDO".equals(evento.estado))return;
         if(evento.operacaoId==null){salvar(evento,null,evento.usuarioId,evento.inscricaoId,agora);evento.estado="PROCESSADA";return;}
+        if(ContextoProximidadeService.TIPOS.contains(evento.tipo)&&!proximidade.valido(evento.operacaoId,evento.registroId,evento.tipo,evento.criadaEm)){evento.estado="DESCARTADA";return;}
         OperacaoViagem op=operacoes.findById(evento.operacaoId).orElseThrow();
+        if(evento.usuarioId!=null){salvar(evento,op,evento.usuarioId,null,agora);evento.estado="PROCESSADA";return;}
         var participantes=registros.findByOperacaoIdOrderByOrdemAscIdAsc(op.id);
         if(evento.registroId!=null){
             var registro=participantes.stream().filter(r->r.id.equals(evento.registroId)).findFirst().orElseThrow();
             destinatario(evento,op,registro,agora);
-            if(!"MOTORISTA".equals(evento.origem))salvar(evento,op,op.motorista.getId(),null,agora);
+            if(!ContextoProximidadeService.TIPOS.contains(evento.tipo)&&!"MOTORISTA".equals(evento.origem))salvar(evento,op,op.motorista.getId(),null,agora);
         }else{
             for(var registro:participantes)destinatario(evento,op,registro,agora);
             salvar(evento,op,op.motorista.getId(),null,agora);
@@ -79,7 +94,7 @@ public class NotificacaoService {
         if(notificacoes.existsByChave(chave))return;
         Notificacao n=new Notificacao();n.chave=chave;n.tipo=e.tipo;n.usuarioId=usuario;n.inscricaoId=inscricao;
         n.operacaoId=op==null?null:op.id;n.registroId=e.registroId;n.contextoTipo=op==null?e.contextoTipo:op.tipo.name();n.contextoId=op==null?e.contextoId:op.referenciaId;
-        n.titulo="Atualização da viagem";n.mensagem=mensagem(e.tipo);n.criadaEm=agora;notificacoes.save(n);
+        n.titulo="Atualização da viagem";n.mensagem=mensagem(e.tipo);n.criadaEm=e.criadaEm;notificacoes.save(n);
         if(usuario!=null&&preferencias.findById(usuario).map(p->p.pushOperacional).orElse(true)){
             for(var dispositivo:dispositivos.findByUsuarioIdAndAtivoTrue(usuario)){
                 var entrega=new EntregaPush();entrega.notificacao=n;entrega.dispositivo=dispositivo;entrega.proximaTentativa=agora;entregas.save(entrega);
@@ -98,6 +113,11 @@ public class NotificacaoService {
         case "NOVA_INSCRICAO"->"Uma nova inscrição aguarda análise.";
         case "INSCRICAO_CONFIRMADA"->"Sua inscrição foi confirmada.";
         case "INSCRICAO_CANCELADA"->"Uma inscrição foi cancelada.";
+        case "PASSAGEIROS_AGUARDANDO"->"Existem passageiros aguardando embarque.";
+        case "TODOS_EMBARCARAM"->"Todos os passageiros esperados tiveram embarque confirmado.";
+        case "VAN_APROXIMANDO"->"A van está próxima do seu ponto. Consulte o acompanhamento autorizado.";
+        case "VOCE_E_PROXIMO"->"Seu ponto está na próxima ordem de embarque.";
+        case "VAN_CHEGOU"->"Uma posição recente da van foi registrada junto ao seu ponto. Confirme o embarque ao entrar.";
         default->"O estado operacional foi atualizado. Consulte os detalhes autorizados no aplicativo.";
     };}
     private Long usuario(String uid){return usuarios.findByFirebaseUid(uid).orElseThrow(()->new ResponseStatusException(HttpStatus.FORBIDDEN)).getId();}

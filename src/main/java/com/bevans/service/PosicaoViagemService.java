@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PosicaoViagemService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private org.springframework.context.ApplicationEventPublisher eventos;
     private final ViagemRepository viagens;
     private final TurmaRepository turmas;
     private final UsuarioRepository usuarios;
@@ -48,7 +49,7 @@ public class PosicaoViagemService {
         if(!ativo(v))throw new ResponseStatusException(HttpStatus.CONFLICT,"Viagem encerrada.");
         PosicaoViagem p=posicoes.findById(id).orElseGet(PosicaoViagem::new);
         var amostra=RegrasGps.validar(d,p,v.getIniciadaEm(),clock);
-        if(amostra.nova()){p.atualizar(id,amostra.dados(),amostra.recebida());posicoes.saveAndFlush(p);}
+        if(amostra.nova()){p.atualizar(id,amostra.dados(),amostra.recebida());posicoes.saveAndFlush(p);if(eventos!=null)eventos.publishEvent(new EventosDeViagem.Gps(TipoOperacao.VIAGEM,id));}
         return dto(v,p);
     }
     @Transactional(readOnly=true)

@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.bevans.dto.EnderecoRequest;
+import com.bevans.dto.PerfilUsuarioDTO;
 import com.bevans.model.Usuario;
 import com.bevans.repository.PresencaRepository;
 import com.bevans.repository.UsuarioRepository;
@@ -114,12 +115,12 @@ listarPassageiros() {
     @Operation(summary = "Buscar por Firebase UID", description = "Retorna os dados do usuário com base no UID do Firebase Authentication.")
     @GetMapping("/por-uid/{firebaseUid}")
     @PreAuthorize("@access.ownsUid(#p0)")
-    public ResponseEntity<Usuario> buscarPorFirebaseUid(@PathVariable String firebaseUid) {
+    public ResponseEntity<PerfilUsuarioDTO> buscarPorFirebaseUid(@PathVariable String firebaseUid) {
         Usuario usuario = usuarioRepository.findByFirebaseUid(firebaseUid)
                 .orElseThrow(() -> new RecursoNaoEncontradoException(
                         "Usuário não encontrado."
                 ));
-        return ResponseEntity.ok(usuario);
+        return ResponseEntity.ok(PerfilUsuarioDTO.proprio(usuario));
     }
 
     @Operation(summary = "Cadastrar Usuário autenticado no Firebase")
@@ -173,7 +174,7 @@ listarPassageiros() {
         if (novoUsuario.getNome().isBlank() || novoUsuario.getTelefone().isBlank()) {
             throw new IllegalArgumentException("Nome e telefone são obrigatórios.");
         }
-        return ResponseEntity.ok(usuarioService.cadastrarUsuario(novoUsuario));
+        return ResponseEntity.ok(PerfilUsuarioDTO.proprio(usuarioService.cadastrarUsuario(novoUsuario)));
     }
 
     private String valor(Map<String, Object> dados, String chave) {
@@ -195,7 +196,7 @@ listarPassageiros() {
         usuario.setLongitude(request.getLongitude());
         usuario.setEnderecoCompleto(request.getEnderecoCompleto());
         usuarioRepository.save(usuario);
-        return ResponseEntity.ok(usuario);
+        return ResponseEntity.ok(PerfilUsuarioDTO.proprio(usuario));
     }
 
     @Operation(summary = "Atualizar E-mail", description = "Atualiza o e-mail do usuário no banco local.")
@@ -204,7 +205,7 @@ listarPassageiros() {
     public ResponseEntity<?> atualizarEmail(@PathVariable Long id, @RequestBody Map<String, String> body) {
         String novoEmail = body.get("email");
         Usuario usuarioAtualizado = usuarioService.atualizarEmail(id, novoEmail);
-        return ResponseEntity.ok(usuarioAtualizado);
+        return ResponseEntity.ok(PerfilUsuarioDTO.proprio(usuarioAtualizado));
     }
 
     @Operation(summary = "Excluir Usuário", description = "Apaga permanentemente a conta do usuário do sistema.")

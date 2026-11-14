@@ -14,21 +14,27 @@ public class Usuario {
     private String nome;
 
     @Column(nullable = false, unique = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String telefone;
 
     @Column(nullable = false, unique = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String email;
 
     @Column(nullable = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String firebaseUid;
 
     @Column(nullable = false)
     private String tipo;
 
     @Column(nullable = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String enderecoCompleto;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Double latitude;
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Double longitude;
 
     public Usuario() {}

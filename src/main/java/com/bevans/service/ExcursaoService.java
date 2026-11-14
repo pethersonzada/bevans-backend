@@ -19,7 +19,8 @@ public class ExcursaoService {
     private final UsuarioRepository usuarios;
     private final EntityManager em;
     private final Clock clock;
-    public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;}
+    private final ParadaExcursaoRepository paradas;
+    public ExcursaoService(ExcursaoRepository excursoes,UsuarioRepository usuarios,EntityManager em,Clock clock,ParadaExcursaoRepository paradas){this.excursoes=excursoes;this.usuarios=usuarios;this.em=em;this.clock=clock;this.paradas=paradas;}
     private Usuario motorista(String uid){
         Usuario u=usuarios.findByFirebaseUid(uid).orElseThrow(()->new AccessDeniedException("Perfil não encontrado."));
         if(!"MOTORISTA".equals(u.getTipo()))throw new AccessDeniedException("Somente motoristas gerenciam excursões.");return u;
@@ -55,11 +56,38 @@ public class ExcursaoService {
         Excursao e=propria(id,uid,true);if(e.getEstado()==EstadoExcursao.CONCLUIDA)throw new ResponseStatusException(HttpStatus.CONFLICT,"Excursão concluída.");
         e.setEstado(EstadoExcursao.CANCELADA);return dto(excursoes.saveAndFlush(e));
     }
+    @Transactional public ExcursaoDTO configurarColeta(Long id,String uid,ColetaExcursaoRequest d){
+        Excursao e=propria(id,uid,true);editavel(e);
+        if(d==null||d.modo()==null||d.paradas()==null)throw new IllegalArgumentException("Informe modo e lista de paradas.");
+        versao(e,d.versao());int n=d.paradas().size();
+        if(n>50||(d.modo()==ModoColetaExcursao.PORTA_A_PORTA&&n!=0)
+                ||(d.modo()==ModoColetaExcursao.PARADA_UNICA&&n!=1)||(d.modo()==ModoColetaExcursao.MULTIPLAS_PARADAS&&n<2))
+            throw new IllegalArgumentException("Modo incompatível com a quantidade de paradas (máximo 50).");
+        var existentes=paradas.findByExcursaoIdOrderByOrdemAscIdAsc(id);
+        var porId=new java.util.HashMap<Long,ParadaExcursao>();existentes.forEach(p->porId.put(p.getId(),p));
+        var ids=new java.util.HashSet<Long>();
+        for(var p:d.paradas()){
+            if(p==null||!Boolean.TRUE.equals(p.pontoConfirmado()))throw new IllegalArgumentException("Confirme cada ponto no mapa.");
+            texto(p.nome(),120,"nome da parada");ponto(p.latitude(),p.longitude());
+            if(p.instrucoes()!=null&&p.instrucoes().length()>500)throw new IllegalArgumentException("Instruções devem ter até 500 caracteres.");
+            if(p.id()!=null&&(!porId.containsKey(p.id())||!ids.add(p.id())))throw new IllegalArgumentException("Parada duplicada ou de outra excursão.");
+        }
+        existentes.forEach(ParadaExcursao::desativar);int ordem=0;
+        for(var dpar:d.paradas()){
+            ParadaExcursao p=dpar.id()==null?new ParadaExcursao():porId.get(dpar.id());
+            p.configurar(e,ordem++,dpar.nome().trim(),dpar.latitude(),dpar.longitude(),dpar.horario(),dpar.instrucoes());paradas.save(p);
+        }
+        paradas.flush();e.alterarColeta(d.modo());return dto(excursoes.saveAndFlush(e));
+    }
     @Transactional(readOnly=true) public ExcursaoDTO consultar(Long id,String uid){return dto(propria(id,uid,false));}
     @Transactional(readOnly=true) public PaginaDTO<ExcursaoDTO> minhas(String uid,int pagina,int tamanho){
         Usuario u=motorista(uid);if(pagina<0||pagina>10000||tamanho<1||tamanho>50)throw new IllegalArgumentException("Paginação inválida.");
         var p=excursoes.findByOrganizadorId(u.getId(),PageRequest.of(pagina,tamanho,Sort.by("id").descending()));
         return new PaginaDTO<>(p.stream().map(this::dto).toList(),p.getTotalElements(),pagina,tamanho,p.getTotalPages());
     }
-    private ExcursaoDTO dto(Excursao e){return new ExcursaoDTO(e.getId(),e.getTitulo(),e.getDestinoNome(),e.getDestinoLatitude(),e.getDestinoLongitude(),e.getOrigemNome(),e.getOrigemLatitude(),e.getOrigemLongitude(),e.getPartidaEm(),e.getRetornoEm(),e.getCapacidade(),e.getEstado(),e.getVersao(),e.getCriadaEm());}
+    private ExcursaoDTO dto(Excursao e){
+        var pontos=paradas.findByExcursaoIdOrderByOrdemAscIdAsc(e.getId()).stream().filter(ParadaExcursao::isAtiva)
+                .map(p->new ParadaExcursaoDTO(p.getId(),p.getOrdem(),p.getNome(),p.getLatitude(),p.getLongitude(),p.getHorario(),p.getInstrucoes())).toList();
+        return new ExcursaoDTO(e.getId(),e.getTitulo(),e.getDestinoNome(),e.getDestinoLatitude(),e.getDestinoLongitude(),e.getOrigemNome(),e.getOrigemLatitude(),e.getOrigemLongitude(),e.getPartidaEm(),e.getRetornoEm(),e.getCapacidade(),e.getEstado(),e.getVersao(),e.getCriadaEm(),e.getModoColeta(),pontos);
+    }
 }

@@ -20,6 +20,11 @@ public class Excursao {
     @Column(nullable=false) private int capacidade;
     @Enumerated(EnumType.STRING) @Column(nullable=false) private EstadoExcursao estado=EstadoExcursao.RASCUNHO;
     @Version private long versao;
+    @Enumerated(EnumType.STRING) @Column(nullable=false)
+    private ModoColetaExcursao modoColeta=ModoColetaExcursao.PORTA_A_PORTA;
+    @Column(nullable=false) private long revisaoColeta;
+    public ModoColetaExcursao getModoColeta(){return modoColeta;}
+    public void alterarColeta(ModoColetaExcursao modo){modoColeta=modo;revisaoColeta++;}
     @Column(nullable=false,updatable=false) private Instant criadaEm;
     public Long getId(){return id;}
     public Usuario getOrganizador(){return organizador;}

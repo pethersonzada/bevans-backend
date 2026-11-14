@@ -15,4 +15,5 @@ public class ExcursaoController {
     public record VersaoRequest(Long versao){}
     @PutMapping("/{id}/publicacao") public ExcursaoDTO publicar(@PathVariable Long id,@RequestBody VersaoRequest d){if(d==null)throw new IllegalArgumentException("Informe versão.");return service.publicar(id,access.uid(),d.versao());}
     @PutMapping("/{id}/cancelamento") public ExcursaoDTO cancelar(@PathVariable Long id){return service.cancelar(id,access.uid());}
+    @PutMapping("/{id}/coleta") public ExcursaoDTO coleta(@PathVariable Long id,@RequestBody ColetaExcursaoRequest d){return service.configurarColeta(id,access.uid(),d);}
 }

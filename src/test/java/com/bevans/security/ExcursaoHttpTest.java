@@ -22,4 +22,15 @@ class ExcursaoHttpTest extends BaseAutorizacaoHttpTest {
             mvc.perform(get("/excursoes/1").param("organizadorId","99").header("Authorization","Bearer valido")).andExpect(status().isOk());
         }verify(service).consultar(1L,"motorista");
     }
+    @Test void coletaExigeMotoristaEIdentidadeDoToken() throws Exception {
+        String json="{\"modo\":\"PORTA_A_PORTA\",\"paradas\":[],\"versao\":0}";
+        mvc.perform(put("/excursoes/1/coleta").contentType("application/json").content(json)).andExpect(status().isUnauthorized());
+        identidade("passageiro",usuario(2,"PASSAGEIRO"));try(var ignored=firebase("valido","passageiro")){
+            mvc.perform(put("/excursoes/1/coleta").contentType("application/json").content(json).header("Authorization","Bearer valido")).andExpect(status().isForbidden());
+        }
+        identidade("motorista",usuario(1,"MOTORISTA"));try(var ignored=firebase("valido","motorista")){
+            mvc.perform(put("/excursoes/1/coleta").contentType("application/json").content(json).header("Authorization","Bearer valido")).andExpect(status().isOk());
+        }
+        verify(service).configurarColeta(eq(1L),eq("motorista"),argThat(d->d.modo()==com.bevans.model.ModoColetaExcursao.PORTA_A_PORTA&&d.versao()==0));
+    }
 }

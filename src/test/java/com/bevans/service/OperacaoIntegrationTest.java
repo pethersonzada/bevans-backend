@@ -32,6 +32,8 @@ class OperacaoIntegrationTest {
     @Autowired org.springframework.context.ApplicationEventPublisher eventos;
     @Autowired ReservaOutboxService reservas;
     @Autowired NotificacaoInscricaoService avisosWeb;
+    @Autowired PosicaoExcursaoService gpsExcursao;@Autowired PosicaoExecucaoExcursaoRepository posicoesExcursao;
+    @Autowired CredencialInscricaoExcursaoRepository credenciaisInscricao;
     private record Cenario(Turma turma,Usuario dono,Usuario aluno){}
     private Usuario usuario(String tipo){String id=UUID.randomUUID().toString();var u=new Usuario();u.setNome(id);u.setTelefone(id);u.setEmail(id+"@test.invalid");u.setFirebaseUid(id);u.setTipo(tipo);return usuarios.save(u);}
     private Cenario cenario(){
@@ -117,12 +119,24 @@ class OperacaoIntegrationTest {
         var dono=usuario("MOTORISTA");long matriculas=vinculos.count();var e=excursoes.criar(dono.getFirebaseUid(),new ExcursaoRequest("Evento","Destino",-8.3,-35.3,"Origem",-8.0,-35.0,clock.instant().plusSeconds(86400),null,12,null));e=excursoes.publicar(e.id(),dono.getFirebaseUid(),e.versao());
         var convite=convites.emitir(e.id(),dono.getFirebaseUid(),clock.instant().plusSeconds(3600));String token=inscricoes.emitirCredencial(convite.token()).token();var i=inscricoes.solicitar(convite.token(),token,new InscricaoExcursaoRequest("Sem celular","contato@test.invalid",null,"Pin",-8.1,-35.1,true,true));inscricoes.confirmar(e.id(),i.id(),dono.getFirebaseUid());
         var x=execucoes.iniciar(e.id(),dono.getFirebaseUid(),"IDA",false);var r=service.minhaWeb(x.id(),token);assertNull(r.alunoId());assertEquals(i.id(),r.inscricaoId());
+        var amostra=new PosicaoRequest("exc-inicial",-8.1,-35.1,clock.instant(),5.0,null);
+        assertEquals("SEM_LOCALIZACAO",gpsExcursao.consultarParticipante(x.id(),token).estado());
+        assertThrows(ResponseStatusException.class,()->gpsExcursao.consultarParticipante(x.id(),convite.token()));
+        assertThrows(AccessDeniedException.class,()->gpsExcursao.enviar(x.id(),usuario("MOTORISTA").getFirebaseUid(),amostra));
+        gpsExcursao.enviar(x.id(),dono.getFirebaseUid(),amostra);
+        var posicao=gpsExcursao.consultarParticipante(x.id(),token);assertEquals("ATUALIZADA",posicao.estado());assertEquals(-8.1,posicao.latitude());
+        assertEquals(posicao.recebidoEm(),gpsExcursao.enviar(x.id(),dono.getFirebaseUid(),amostra).recebidoEm());
+        assertTrue(posicoesExcursao.findById(x.id()).isPresent());
         assertThrows(ResponseStatusException.class,()->service.minhaWeb(x.id(),convite.token()));
         distribuir();assertEquals(2,avisosWeb.listar(token,0,20).getTotalElements());
         assertThrows(ResponseStatusException.class,()->avisosWeb.listar(convite.token(),0,20));
         var aviso=avisosWeb.listar(token,0,20).getContent().getFirst();avisosWeb.ler(token,aviso.id());assertNotNull(avisosWeb.listar(token,0,20).getContent().getFirst().lidaEm());
         r=service.alterarDono(TipoOperacao.EXCURSAO,x.id(),r.id(),dono.getFirebaseUid(),estado(EstadoOperacional.EMBARCADO,0));
         assertEquals("MOTORISTA",r.origem());service.alterarWeb(x.id(),token,estado(EstadoOperacional.DESEMBARCADO,r.versao()));execucoes.finalizar(e.id(),x.id(),dono.getFirebaseUid());assertEquals(matriculas,vinculos.count());
+        assertNull(posicoesExcursao.findById(x.id()).orElseThrow().getLatitude());
+        assertEquals("FINALIZADA",gpsExcursao.consultarParticipante(x.id(),token).estado());
+        assertNull(gpsExcursao.consultarParticipante(x.id(),token).latitude());
+        assertEquals(409,assertThrows(ResponseStatusException.class,()->gpsExcursao.enviar(x.id(),dono.getFirebaseUid(),amostra)).getStatusCode().value());
     }
     @Test void publicasFixaEFlexivelSoIncluemPedidosAprovados(){
         for(ModoRota modo:ModoRota.values()){
@@ -133,6 +147,21 @@ class OperacaoIntegrationTest {
             Long id=iniciar(c,"IDA");var painel=service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid());assertEquals(1,painel.contadores().esperados());assertEquals(p.id(),painel.registros().get(0).paradaId());
             assertThrows(AccessDeniedException.class,()->service.minha(id,pendente.getFirebaseUid()));
         }
+    }
+    @Test void cancelamentoLimpaGpsEInscricaoAusenteOuExpiradaNaoPodeRastrear()throws Exception{
+        var dono=usuario("MOTORISTA");var e=excursoes.criar(dono.getFirebaseUid(),new ExcursaoRequest("GPS","Destino",-8.3,-35.3,"Origem",-8.0,-35.0,clock.instant().plusSeconds(86400),null,12,null));e=excursoes.publicar(e.id(),dono.getFirebaseUid(),e.versao());
+        var convite=convites.emitir(e.id(),dono.getFirebaseUid(),clock.instant().plusSeconds(3600));String token=inscricoes.emitirCredencial(convite.token()).token();String naoInscrito=inscricoes.emitirCredencial(convite.token()).token();
+        var i=inscricoes.solicitar(convite.token(),token,new InscricaoExcursaoRequest("GPS","gps@test.invalid",null,"Pin",-8.1,-35.1,true,true));inscricoes.confirmar(e.id(),i.id(),dono.getFirebaseUid());
+        var x=execucoes.iniciar(e.id(),dono.getFirebaseUid(),"IDA",false);var amostra=new PosicaoRequest("concorrente",-8.1,-35.1,clock.instant(),5.0,null);
+        var pool=Executors.newFixedThreadPool(2);try{
+            var a=pool.submit(()->gpsExcursao.enviar(x.id(),dono.getFirebaseUid(),amostra));var b=pool.submit(()->gpsExcursao.enviar(x.id(),dono.getFirebaseUid(),amostra));
+            assertEquals(a.get(20,TimeUnit.SECONDS).recebidoEm(),b.get(20,TimeUnit.SECONDS).recebidoEm());
+        }finally{pool.shutdownNow();}
+        assertThrows(ResponseStatusException.class,()->gpsExcursao.consultarParticipante(x.id(),naoInscrito));
+        var cred=credenciaisInscricao.findByTokenHash(TokensExcursao.hash(token)).orElseThrow();cred.prolongar(clock.instant().minusSeconds(1));credenciaisInscricao.save(cred);
+        assertThrows(ResponseStatusException.class,()->gpsExcursao.consultarParticipante(x.id(),token));
+        excursoes.cancelar(e.id(),dono.getFirebaseUid());
+        assertNull(posicoesExcursao.findById(x.id()).orElseThrow().getLatitude());assertEquals("FINALIZADA",gpsExcursao.consultar(x.id(),dono.getFirebaseUid()).estado());
     }
     @Test void coletaPrivadaUsaParadaEfetivaNoSnapshotOperacional(){
         var c=cenario();var p=presencas.findByUsuarioIdAndTurmaIdAndData(c.aluno().getId(),c.turma().getId(),LocalDate.now(clock)).orElseThrow();p.setStatus("NAO_VOU");presencas.save(p);

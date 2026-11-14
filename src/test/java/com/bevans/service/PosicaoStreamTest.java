@@ -30,4 +30,13 @@ class PosicaoStreamTest {
         doReturn(dto("DESATUALIZADA")).when(gps).consultar(1L,"uid");s.abrir(1L,"uid",clock.instant().plusSeconds(600));assertEquals(1,s.quantidade());
         when(gps.consultar(1L,"uid")).thenReturn(dto("FINALIZADA"));s.atualizar();assertEquals(0,s.quantidade());
     }
+    @Test void contextosCompartilhamLimiteERevalidamCredencialSemGuardarSegredo(){
+        var gps=mock(PosicaoViagemService.class);var clock=new Tempo();var s=new PosicaoStreamService(gps,clock);
+        var permitido=new java.util.concurrent.atomic.AtomicBoolean(true);
+        java.util.function.Supplier<PosicaoStreamService.Atualizacao> consulta=()->{if(!permitido.get())throw new AccessDeniedException("Revogada");return new PosicaoStreamService.Atualizacao("ATUALIZADA",java.util.Map.of("execucaoId",2));};
+        s.abrirContexto("C:9",clock.instant().plusSeconds(600),consulta);
+        s.abrirContexto("C:9",clock.instant().plusSeconds(600),consulta);
+        assertThrows(ResponseStatusException.class,()->s.abrirContexto("C:9",clock.instant().plusSeconds(600),consulta));
+        permitido.set(false);s.atualizar();assertEquals(0,s.quantidade());
+    }
 }

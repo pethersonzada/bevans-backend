@@ -153,17 +153,15 @@ public class GlobalExceptionHandler {
             Exception ex,
             WebRequest request
     ) {
-        log.error(
-                "Erro não tratado em {}",
-                request.getDescription(false),
-                ex
-        );
-
-        return resposta(
+        String correlacao = java.util.UUID.randomUUID().toString();
+        log.error("Erro interno; correlacao={}; tipo={}", correlacao, ex.getClass().getSimpleName());
+        ResponseEntity<Object> resposta = resposta(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Erro interno do servidor.",
                 request
         );
+        return ResponseEntity.status(resposta.getStatusCode())
+                .header("X-Correlation-Id", correlacao).body(resposta.getBody());
     }
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)

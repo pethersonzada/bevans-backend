@@ -49,7 +49,7 @@ class OperacaoIntegrationTest {
         var e=new Endereco();e.setUsuario(a);e.setLatitude(-8.1);e.setLongitude(-35.1);e=enderecos.save(e);var f=new Endereco();f.setUsuario(a);f.setLatitude(-8.2);f.setLongitude(-35.2);f=enderecos.save(f);
         var p=new Presenca();p.setTurma(t);p.setUsuario(a);p.setData(LocalDate.now(clock));p.setStatus("AMBOS");p.setEnderecoIda(e);p.setEnderecoVolta(f);presencas.save(p);return new Cenario(t,d,a);
     }
-    private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);return viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow().getId();}
+    private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);var v=viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow();assertEquals(clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),v.getIniciadaEm());return v.getId();}
     private OperacaoDTO.Alteracao estado(EstadoOperacional e,long versao){return new OperacaoDTO.Alteracao(e,false,versao,null);}
     private void distribuir(){for(int i=0;i<1000;i++){Long id=reservas.reservar();if(id==null)break;notificacoes.distribuir(id);} }
     @Test void centralPersisteDeduplicaIsolaLeituraERevalidaVinculo(){

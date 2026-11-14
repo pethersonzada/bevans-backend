@@ -16,6 +16,8 @@ import com.bevans.repository.ViagemRepository;
 
 @Service
 public class ViagemService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private java.time.Clock clock=java.time.Clock.systemUTC();
 
     private final ViagemRepository viagemRepository;
     private final TurmaRepository turmaRepository;
@@ -48,6 +50,7 @@ public class ViagemService {
         novaViagem.setTurma(turma);
         novaViagem.setSentido(sentido);
         novaViagem.setStatus("EM_ANDAMENTO");
+        novaViagem.registrarInicio(clock.instant(),clock.getZone());
 
         viagemRepository.saveAndFlush(novaViagem);
         if(publisher!=null)publisher.publishEvent(new EventosDeViagem.Viagem("INICIADA",novaViagem.getId()));

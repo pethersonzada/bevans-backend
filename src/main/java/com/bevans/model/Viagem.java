@@ -29,14 +29,19 @@ public class Viagem {
     private LocalDateTime dataCriacao;
     private java.time.Instant iniciadaEm;
     public java.time.Instant getIniciadaEm(){return iniciadaEm;}
+    public void registrarInicio(java.time.Instant instante,java.time.ZoneId zona){
+        if(id!=null)throw new IllegalStateException("Início de viagem persistida não pode ser reescrito");
+        this.iniciadaEm=instante.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        this.dataCriacao=LocalDateTime.ofInstant(this.iniciadaEm,zona);
+    }
 
     @Column(nullable = false)
     private boolean excluido = false;
 
     @PrePersist
     protected void onCreate() {
-        this.dataCriacao = LocalDateTime.now();
-        this.iniciadaEm = java.time.Instant.now();
+        if(this.dataCriacao==null)this.dataCriacao = LocalDateTime.now();
+        if(this.iniciadaEm==null)this.iniciadaEm = java.time.Instant.now();
     }
 
     public Long getId() { return id; }

@@ -12,6 +12,7 @@ public class ConviteExcursaoController {
     private final ConviteExcursaoService service;private final AccessPolicy access;
     public ConviteExcursaoController(ConviteExcursaoService s,AccessPolicy a){service=s;access=a;}
     public record EmitirRequest(Instant expiraEm){}
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="201",description="Convite criado; token exibido somente nesta resposta")
     @PostMapping public ResponseEntity<ConviteEmitidoDTO> emitir(@PathVariable Long id,@RequestBody EmitirRequest d){
         if(d==null)throw new IllegalArgumentException("Informe validade.");
         return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(service.emitir(id,access.uid(),d.expiraEm()));

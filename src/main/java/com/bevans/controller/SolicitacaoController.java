@@ -22,6 +22,7 @@ public class SolicitacaoController {
     public List<SolicitacaoVagaDTO> minhas() { return service.minhasSolicitacoes(access.usuario().getId()); }
 
     @DeleteMapping("/{id}")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     @PreAuthorize("@access.ownVinculo(#p0)")
     @Operation(summary="Cancelar minha solicitação pendente", description="Cancelamento repetido é idempotente; aprovada/rejeitada retorna 409.")
     public ResponseEntity<Void> cancelar(@PathVariable Long id) {

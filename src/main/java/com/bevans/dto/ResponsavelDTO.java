@@ -8,5 +8,6 @@ public record ResponsavelDTO(Long id,Long passageiroId,Long responsavelId,Estado
     public record Solicitar(String token,Boolean aceite,String termoVersao){@Override public String toString(){return "Solicitar[segredo protegido]";}}
     public record Aprovar(Long versao,Boolean aceite,String termoVersao){}
     public record Revogar(Long versao){}
+    @io.swagger.v3.oas.annotations.media.Schema(name="EventoResponsabilidade")
     public record Evento(String acao,EstadoResponsabilidade estado,Long autorId,Instant criadoEm,long versao,String termoVersao){}
 }

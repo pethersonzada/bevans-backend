@@ -342,6 +342,7 @@ public class RotaController {
     }
 
     @Operation(summary = "Iniciar Rota")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required=true,content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=com.bevans.dto.ContratosEntrada.InicioViagem.class)))
     @PostMapping("/iniciar")
     @PreAuthorize("@access.canStartRota(#p0)")
     public ResponseEntity<Object> iniciarRota(

@@ -124,6 +124,7 @@ listarPassageiros() {
     }
 
     @Operation(summary = "Cadastrar Usuário autenticado no Firebase")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required=true,content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=com.bevans.dto.ContratosEntrada.CadastroUsuario.class)))
     @PostMapping("/cadastrar")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> cadastrar(

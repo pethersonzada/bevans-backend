@@ -8,6 +8,7 @@ public class Endereco {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @io.swagger.v3.oas.annotations.media.Schema(accessMode=io.swagger.v3.oas.annotations.media.Schema.AccessMode.READ_ONLY)
     private Long id;
 
     private String apelido;
@@ -15,11 +16,14 @@ public class Endereco {
     private String numero;
     private String bairro;
     private String complemento;
+    @io.swagger.v3.oas.annotations.media.Schema(minimum="-90",maximum="90",description="Pin explicitamente confirmado; par 0,0 inválido; geocodificação aproximada não confirma residência")
     private Double latitude;
+    @io.swagger.v3.oas.annotations.media.Schema(minimum="-180",maximum="180")
     private Double longitude;
 
     @ManyToOne
     @JoinColumn(name = "usuario_id")
+    @io.swagger.v3.oas.annotations.media.Schema(accessMode=io.swagger.v3.oas.annotations.media.Schema.AccessMode.READ_ONLY,description="Fixado pelo servidor ao titular autorizado do caminho")
     private Usuario usuario;
 
     public Long getId() { return id; }

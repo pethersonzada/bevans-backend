@@ -77,7 +77,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            org.springframework.core.env.Environment ambiente,
+            @org.springframework.beans.factory.annotation.Value("${springdoc.api-docs.enabled:false}")boolean documentacao) throws Exception {
+        boolean docsPublicos=documentacao&&ambiente.acceptsProfiles(org.springframework.core.env.Profiles.of("dev"))
+                &&!ambiente.acceptsProfiles(org.springframework.core.env.Profiles.of("prod"));
         http.csrf(csrf -> csrf.disable())
             .cors(org.springframework.security.config.Customizer.withDefaults())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -98,6 +102,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/health").permitAll()
+                .requestMatchers("/v3/api-docs/**","/swagger-ui/**","/swagger-ui.html")
+                    .access((autenticacao,contexto)->new org.springframework.security.authorization.AuthorizationDecision(
+                        documentacao&&(docsPublicos||autenticacao.get()!=null&&autenticacao.get().isAuthenticated()
+                            &&!(autenticacao.get() instanceof org.springframework.security.authentication.AnonymousAuthenticationToken))))
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/convite").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.POST,"/publico/excursoes/credenciais","/publico/excursoes/inscricoes").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET,"/publico/excursoes/inscricao").permitAll()

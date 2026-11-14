@@ -29,6 +29,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Login vinculado à identidade Firebase verificada")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(required=true,content=@io.swagger.v3.oas.annotations.media.Content(schema=@io.swagger.v3.oas.annotations.media.Schema(implementation=com.bevans.dto.ContratosEntrada.Login.class)))
     @PostMapping("/login")
     public ResponseEntity<Object> login(@RequestBody Map<String, String> payload,
                                         HttpServletRequest request) {

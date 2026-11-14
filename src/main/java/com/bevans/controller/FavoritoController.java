@@ -14,9 +14,11 @@ public class FavoritoController {
     private final AccessPolicy access;
     public FavoritoController(FavoritoService service,AccessPolicy access){this.service=service;this.access=access;}
     @PutMapping("/rotas-publicas/{id}/favorito")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     @Operation(summary="Favoritar rota publicada",description="Idempotente, identidade da sessão; não aceita usuarioId do cliente.")
     public ResponseEntity<Void> favoritar(@PathVariable Long id){service.favoritar(access.usuario().getId(),id);return ResponseEntity.noContent().build();}
     @DeleteMapping("/rotas-publicas/{id}/favorito")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
     public ResponseEntity<Void> remover(@PathVariable Long id){service.remover(access.usuario().getId(),id);return ResponseEntity.noContent().build();}
     @GetMapping("/rotas-publicas/favoritas")
     public PaginaDTO<CatalogoRotaDTO> listar(@RequestParam(defaultValue="0") int pagina,@RequestParam(defaultValue="20") int tamanho){return service.listar(access.usuario().getId(),pagina,tamanho);}

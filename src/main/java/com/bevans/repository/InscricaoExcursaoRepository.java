@@ -9,6 +9,7 @@ public interface InscricaoExcursaoRepository extends JpaRepository<InscricaoExcu
     Optional<InscricaoExcursao> findByCredencialId(Long id);
     List<InscricaoExcursao> findByExcursaoIdAndParticipanteHashAndEstadoIn(Long id,String hash,List<StatusInscricaoExcursao> estados);
     Page<InscricaoExcursao> findByExcursaoId(Long id,Pageable pagina);
+    List<InscricaoExcursao> findByExcursaoIdAndEstadoOrderByIdAsc(Long id,StatusInscricaoExcursao estado);
     long countByExcursaoIdAndEstado(Long id,StatusInscricaoExcursao estado);
     @Query("select count(i) from InscricaoExcursao i where i.excursao.id=:id and (i.estado='CONFIRMADA' or (i.estado='SOLICITADA' and i.reservaValidaAte>:agora))")
     long ocupacao(@Param("id")Long id,@Param("agora")Instant agora);

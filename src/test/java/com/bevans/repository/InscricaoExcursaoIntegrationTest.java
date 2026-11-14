@@ -14,11 +14,12 @@ import org.springframework.transaction.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 @DataJpaTest(properties={"spring.jpa.hibernate.ddl-auto=create-drop","spring.jpa.database-platform=org.hibernate.dialect.H2Dialect","spring.sql.init.mode=never"})
-@Import({ExcursaoService.class,ConviteExcursaoService.class,InscricaoExcursaoService.class,ConviteExcursaoIntegrationTest.Tempo.class})
+@Import({ExcursaoService.class,ConviteExcursaoService.class,InscricaoExcursaoService.class,RoteiroExcursaoService.class,ConviteExcursaoIntegrationTest.Tempo.class})
 @Transactional(propagation=Propagation.NOT_SUPPORTED)
 class InscricaoExcursaoIntegrationTest {
     @Autowired ExcursaoService excursoes;@Autowired ConviteExcursaoService convites;@Autowired InscricaoExcursaoService service;
     @Autowired UsuarioRepository usuarios;@Autowired InscricaoExcursaoRepository inscricoes;@Autowired Clock clock;
+    @Autowired RoteiroExcursaoService roteiros;
     private record Cenario(Long id,String uid,ConviteEmitidoDTO convite){}
     @BeforeEach void tempo(){((ConviteExcursaoIntegrationTest.Relogio)clock).agora=Instant.parse("2030-01-01T12:00:00Z");}
     private String motorista(){String uid=UUID.randomUUID().toString();var u=new Usuario();u.setNome(uid);u.setTelefone(uid);u.setEmail(uid+"@test.invalid");u.setFirebaseUid(uid);u.setTipo("MOTORISTA");usuarios.save(u);return uid;}
@@ -111,5 +112,37 @@ class InscricaoExcursaoIntegrationTest {
             inicio.countDown();a.get(15,TimeUnit.SECONDS);b.get(15,TimeUnit.SECONDS);
             assertEquals(StatusInscricaoExcursao.CANCELADA,service.consultar(token).estado());assertEquals(0,inscricoes.ocupacao(c.id(),clock.instant()));
         }finally{inicio.countDown();pool.shutdownNow();}
+    }
+    @Test void roteiroDosTresModosIncluiSomenteConfirmadosEDestinoFinal(){
+        for(var modo:ModoColetaExcursao.values()){
+            var c=cenario(12,modo);Long paradaId=modo==ModoColetaExcursao.PORTA_A_PORTA?null:excursoes.consultar(c.id(),c.uid()).paradas().get(0).id();
+            var d=modo==ModoColetaExcursao.PORTA_A_PORTA?porta("Ana"):parada("Ana",paradaId);
+            var i=service.solicitar(c.convite().token(),chave(c),d);service.confirmar(c.id(),i.id(),c.uid());
+            service.solicitar(c.convite().token(),chave(c),modo==ModoColetaExcursao.PORTA_A_PORTA?porta("Pendente"):parada("Pendente",paradaId));
+            var pontos=roteiros.planejamento(c.id(),c.uid(),"IDA",true);
+            assertEquals("ORIGEM",pontos.get(0).tipo());assertEquals("Destino",pontos.get(pontos.size()-1).nome());
+            assertEquals(List.of(i.id()),pontos.stream().flatMap(p->p.participantes().stream()).map(PontoRoteiroExcursaoDTO.Participante::inscricaoId).toList());
+            assertThrows(AccessDeniedException.class,()->roteiros.planejamento(c.id(),motorista(),"IDA",false));
+        }
+    }
+    @Test void ordemFixaEVoltaPreservamExtremosSemAlterarCadastro(){
+        var c=cenario(12,ModoColetaExcursao.MULTIPLAS_PARADAS);var e=excursoes.consultar(c.id(),c.uid());
+        var d=new ExcursaoRequest(e.titulo(),e.destinoNome(),e.destinoLatitude(),e.destinoLongitude(),e.origemNome(),e.origemLatitude(),e.origemLongitude(),e.partidaEm(),e.partidaEm().plusSeconds(3600),e.capacidade(),e.versao());
+        excursoes.atualizar(c.id(),c.uid(),d);
+        for(int n=0;n<2;n++){var i=service.solicitar(c.convite().token(),chave(c),parada("Pessoa"+n,e.paradas().get(n).id()));service.confirmar(c.id(),i.id(),c.uid());}
+        var ida=roteiros.planejamento(c.id(),c.uid(),"IDA",false);assertEquals(List.of("Origem","Praça A","Praça B","Destino"),ida.stream().map(PontoRoteiroExcursaoDTO::nome).toList());
+        var volta=roteiros.planejamento(c.id(),c.uid(),"VOLTA",false);assertEquals(List.of("Destino","Praça B","Praça A","Origem"),volta.stream().map(PontoRoteiroExcursaoDTO::nome).toList());
+        assertEquals("DESEMBARQUE",volta.get(1).tipo());roteiros.planejamento(c.id(),c.uid(),"IDA",true);
+        assertEquals(e.paradas(),excursoes.consultar(c.id(),c.uid()).paradas());
+        excursoes.cancelar(c.id(),c.uid());assertThrows(ResponseStatusException.class,()->roteiros.planejamento(c.id(),c.uid(),"IDA",false));
+    }
+    @Test void naoInventaOrigemNemRetornoERecusaPlanejarDepoisDaPartida(){
+        String uid=motorista();var e=excursoes.criar(uid,new ExcursaoRequest("Evento","Destino",-8.3,-35.3,null,null,null,clock.instant().plusSeconds(3600),null,12,null));
+        e=excursoes.publicar(e.id(),uid,e.versao());Long id=e.id();
+        assertEquals(List.of("DESTINO"),roteiros.planejamento(id,uid,"IDA",false).stream().map(PontoRoteiroExcursaoDTO::tipo).toList());
+        assertThrows(IllegalArgumentException.class,()->roteiros.planejamento(id,uid,"IDA",true));
+        assertThrows(IllegalArgumentException.class,()->roteiros.planejamento(id,uid,"VOLTA",false));
+        ((ConviteExcursaoIntegrationTest.Relogio)clock).agora=clock.instant().plusSeconds(3601);
+        assertThrows(ResponseStatusException.class,()->roteiros.planejamento(id,uid,"IDA",false));
     }
 }

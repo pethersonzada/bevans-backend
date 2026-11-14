@@ -1,6 +1,133 @@
 # Estado de retomada — 13/11/2026
 
-## PR #45 — integração local posterior
+## Estado vigente — implementação na main em 13/11/2026
+
+Pedido anexado de evolução backend recebido e lido. Escopo de escrita continua
+somente C:\dev\bevans-backend; nenhum frontend/JS/Expo/Next criado ou alterado.
+Branch inicial **main**, árvore limpa e origin/main sincronizada em **415152e**.
+Executados status/branch/fetch e pull --ff-only (já atualizada). Trabalho anterior
+preservado; nenhuma branch criada/excluída, rebase, reset, push ou deploy.
+Commits novos seguem português natural, sem Conventional Commits.
+
+### Auditoria e baseline desta execução
+
+Consultadas diretamente issues #28–#32, #35, #39–#41, #46–#48 e comentários.
+Comparados contratos de Excursões, turmas, rotas/embarques, presença, endereços,
+GPS/SSE, políticas Firebase/Spring, OR-Tools, Maven/CI e migrações existentes.
+Baseline da main atual: **209 testes padrão aprovados**, zero falhas/erros/ignorados,
+log .validation-logs/main-pendencias-baseline.log. Não havia falha inicial reproduzida.
+Main agora usa Hibernate **validate por padrão**, SQL logging/open-in-view
+desabilitados e JSON rejeita capacidade fracionária; preservar esses commits.
+Não confundir com histórico abaixo que ainda descreve ddl-auto=update.
+
+### Commits locais e funcionalidades verificadas
+
+- **e1b5796** — Implementando modos de coleta e paradas em excursões:
+  PORTA_A_PORTA/PARADA_UNICA/MULTIPLAS_PARADAS, paradas próprias, pins confirmados,
+  ordenação, versões, remoção lógica e isolamento. Migração **009**.
+  Verificado: 215 testes padrão + 57 execuções PostgreSQL.
+- **6518f0a** — Adicionando convites seguros para excursões:
+  SecureRandom 256 bits, hash SHA-256, expiração/revogação, metadados privados e
+  consulta pública limitada por X-Convite. Rate limit, no-store e sem GPS/PII.
+  Migração **010**. Verificado: 224 padrão + 61 execuções PostgreSQL.
+- **3eded6f** — Implementando inscrições e controle de vagas em excursões:
+  credencial individual independente e hashada, reservas de 15min, confirmação,
+  cancelamento/expiração, duplicidade, capacidade concorrente e bloqueios de
+  mudanças incompatíveis. Migração **011**. 234 padrão + 70 PostgreSQL.
+- **45f0281** — Integrando roteiros de excursões ao OR-Tools:
+  apenas confirmados, três modos, ordem fixa por padrão, otimização explícita,
+  origem/destino e ida/volta, sem mutação de cadastro. 239 padrão + 73 PostgreSQL.
+- **26740d0** — Implementando execução persistida e encerramento de excursões:
+  snapshot privado versionado, identidade por sentido, início idempotente e
+  concorrente, finalização/cancelamento e congelamento pós-início. Migração **012**.
+  Último estado verificado: **246 padrão + 78 execuções PostgreSQL**.
+
+Todas as suítes finais de cada incremento passaram, sem falhas/erros/ignorados.
+PostgreSQL repete regras H2 e acrescenta migrações: não somar como casos únicos.
+Nenhum teste anterior removido; os 37 casos padrão novos ampliam a baseline.
+Erro intermediário de compilação no novo teste (var em declaração composta)
+foi corrigido antes do commit; nenhuma falha foi mascarada/desabilitada.
+
+### Contratos novos e arquivos principais
+
+Código organizado em models/repositories/DTOs/controllers/services de Excursões:
+ParadaExcursao, ConviteExcursao, CredencialInscricaoExcursao, InscricaoExcursao,
+ExecucaoExcursao; ExcursaoService/ConviteExcursaoService/InscricaoExcursaoService/
+RoteiroExcursaoService/ExecucaoExcursaoService. SecurityConfig libera somente
+métodos/caminhos públicos específicos; LimiteConvitesFilter protege o prefixo.
+URLs/credenciais de teste são explícitas; não foi consultado .env para obtê-las.
+Não houve integração com Supabase ou alteração de credenciais Firebase.
+
+Contratos detalhados para consumidores, sem implementação frontend:
+- excursoes-coleta-api.md: PUT /excursoes/{id}/coleta e GET de detalhes.
+- excursoes-convites-api.md: administração de convites + GET público por header.
+- excursoes-inscricoes-api.md: emissão de credencial, cadastro/consulta/cancelamento
+  próprios, confirmação pelo dono, listagem e vagas. X-Inscricao é segredo próprio.
+- excursoes-roteiro-api.md: POST planejamento privado, IDA/VOLTA e OR-Tools.
+- excursoes-execucao-api.md: iniciar/listar/finalizar execuções e snapshot.
+
+Antes de cadastro, o cliente deve guardar a credencial emitida, depois reenviá-la
+em retries com os mesmos dados. Não usar token na URL da API, analytics ou logs.
+Link compartilhável deve ser montado pelo consumidor com fragmento local.
+Convite/credencial não autorizam administração, GPS ou dados de outros inscritos.
+Consentimento simples de privacidade não é consentimento legal verificado de menor.
+
+### Banco e validações
+
+Scripts **001–008 preservados**, novos incrementos **009–012**. Upgrade completo
+executa fixture dos seis modelos da main com dados/IDs/FKs e todas as migrações;
+Hibernate valida todos os mapeamentos sem completar DDL. Testes SQL verificam
+unicidade parcial de inscrições, validade de coordenadas, uma execução ativa e
+uma por sentido. CI atualizada para schemas invite_service/enrollment_service.
+
+Banco exclusivo de teste: PostgreSQL 16, container bevans-pendencias-validation,
+ID **6692466b0a720e4668077782eb889382422e1e56fedce78b6e9a1ef3cd064042**,
+bind 127.0.0.1:55435, bevans_validation, credenciais somente de teste.
+Schemas capacity_service/publication_service/boarding_service/catalog_service/
+favorite_service/gps_service/excursion_service/invite_service/enrollment_service
+e migration_UUID/upgrade_UUID. Docker Desktop precisou ser iniciado em segundo plano.
+Container encerrado ao fechar esta sessão após conferir ID; --rm removeu somente
+esse banco de teste. Docker Desktop permaneceu em execução.
+
+Logs ignorados em .validation-logs: main-pendencias-baseline.log e os pares
+*-clean-verify.log/*-postgres.log para excursao-coleta, convites, inscricoes,
+excursao-roteiro e excursao-execucao. Testes direcionados também registrados.
+Maven 3.9.14 em cache, Java 26 local com flag ByteBuddy experimental; projeto e
+CI continuam Java 21. Não foi executada CI remota nem teste em dispositivos.
+Reabertura em transações distintas foi testada; reinício literal de VM/app não.
+
+### Pendências exatas e próxima implementação
+
+Não declarar todo o pedido concluído. #29/#30/#31 avançaram em backend; issues
+receberam comentários reais e continuam abertas para aceite completo/integração.
+Não foram fechadas issues de frontend ou alterados consumidores externos.
+
+Próxima tarefa de backend: **#48**, modo privado por turma/sentido, paradas próprias,
+escolha persistida separada da sugestão geográfica, endereço só do titular,
+congelamento durante viagem e preservação porta a porta IDA/VOLTA. Manter essas
+paradas separadas de ParadaExcursao/ParadaPublica. Roteiro manual por padrão.
+Depois **#46**: um domínio operacional comum aos três módulos, com snapshot de
+esperados, aluno OU motorista confirma, desembarque/ausência/correções auditáveis
+e contadores. Não confundir inscrição CONFIRMADA com EMBARCADO. Excursões já têm
+execucaoId persistido para essa integração; não duplicar o cadastro escolar.
+Finalização atual de Excursões é explícita do motorista e ainda não verifica
+pessoas embarcadas porque o controle físico compartilhado ainda não existe.
+
+**#47** segue pendente: central persistente única, preferências, outbox/deduplicação,
+dispositivos/revogação/FCM e alertas por ponto realmente escolhido, ordem real e
+GPS recente. Não enviar push real de teste ou simular FCM para participante sem
+dispositivo. GPS de Excursões precisa de adaptação autorizada por inscrição e
+execução, reaproveitando infraestrutura existente, sem herdar autorização escolar
+ou criar canal público. #41 escolar/SSE permanece preservada.
+
+**#32**: fluxo API real básico já testado com H2, mas demo integrada mobile/web,
+dois dispositivos, FCM real, consentimento verificado de menores, retomada após
+reinício literal e validação SSE/Nginx real continuam externos/pendentes.
+Não há impedimento geral registrado para continuar o backend restante; não
+tratar essas limitações externas como conclusão de #48/#46/#47. Retomar daqui,
+sem repetir auditoria completa ou reimplementar os cinco incrementos acima.
+
+## Histórico — PR #45 e integração local anterior
 
 Main integrada por merge normal após fetch, de `9ef969d` até origin/main `1a24bb3`.
 Conflitos de RotaController, ViagemService e teste de contexto resolvidos

@@ -1,6 +1,23 @@
 # Auditoria e execução — 13/11/2026
 
-## Atualização vigente — escopo exclusivo de backend
+## Atualização vigente — main 415152e e incrementos posteriores
+
+Main limpa/sincronizada antes da implementação; status/branch/fetch e pull --ff-only
+executados. Baseline real 209 testes aprovados. Issues #28–#32, #35, #39–#41 e
+#46–#48 e comentários consultados; recursos existentes preservados.
+Novos incrementos reais: modos/paradas de Excursões, convites seguros, credencial
+individual, inscrições/reservas concorrentes, OR-Tools privado e execução com
+snapshot/início/finalização. Migrações 009–012, sem reescrever 001–008.
+
+Último clean verify: **246 testes padrão aprovados**. Perfil PostgreSQL:
+**78 execuções aprovadas**, incluindo upgrade completo, Hibernate validate,
+constraints e concorrência. Sem remoção de testes. Commits em português e
+contratos detalhados registrados em retomada.md; nenhum push/deploy/produção.
+
+#48, controle físico compartilhado #46, notificações #47 e integração final #32
+continuam pendentes. Não afirmar aceite total por esses incrementos passarem.
+
+## Histórico — escopo exclusivo de backend anterior
 
 Frontend indevido em target removido após comparação e preservação dos logs.
 Nenhum artefato foi transferido ao frontend; nenhuma escrita naquele repositório.

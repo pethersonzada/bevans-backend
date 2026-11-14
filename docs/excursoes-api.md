@@ -24,14 +24,16 @@ coordenadas. Destino sempre obrigatório. Instantes ISO-8601 com offset/UTC.
 
 `PUT /excursoes/{id}/publicacao` com `{"versao":0}` muda RASCUNHO para PUBLICADA
 antes da partida. `PUT /excursoes/{id}/cancelamento` cancela logicamente e é
-idempotente. Não remove dados nem reabre cancelada/concluída. Enum CONCLUIDA
-reservado ao ciclo operacional a completar com #31; não há conclusão automática.
+idempotente. Não remove dados nem reabre cancelada/concluída. CONCLUIDA é aplicada
+ao finalizar a última execução pelo organizador, conforme excursoes-execucao-api.md;
+o relógio sozinho não conclui a excursão.
 
 Migração incremental 008 cria tabela/índice sem alterar dados dos outros
-módulos. Recuperação mantém tabela e desabilita endpoints. A capacidade ainda
-não reserva vagas: inscrições, concorrência de reservas, redução abaixo da
-ocupação e tokens independentes serão implementados na #30 antes de habilitar
-cadastro de passageiros. OR-Tools/check-in pertencem à #31. #32 depende de
+módulos. Incrementos 009–012 adicionam coleta, convites, reservas concorrentes e
+execução, preservando a migração 008. Contratos atuais: excursoes-coleta-api.md,
+excursoes-convites-api.md, excursoes-inscricoes-api.md, excursoes-roteiro-api.md e
+excursoes-execucao-api.md. Recuperação mantém tabelas/dados. Controle físico de
+embarque/desembarque e notificações continuam #46/#47. #32 depende de
 integração nos repositórios mobile/web, fora do escopo de escrita desta sessão.
 
 Testes de criação/edição/publicação/cancelamento, isolamento entre organizadores,

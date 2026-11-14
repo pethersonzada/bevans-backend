@@ -66,9 +66,11 @@ Excursao serializam reservas, confirmação, cancelamento, edição e mudanças 
 Reduzir capacidade abaixo de SOLICITADAS válidas + CONFIRMADAS retorna 409.
 Com inscrição ativa, mudança de origem/destino/data/horário/modo/paradas é recusada
 com 409. Título e capacidade compatível continuam editáveis. Cancelar excursão
-cancela logicamente inscrições e impede novos convites/cadastros. Após partida,
+cancela logicamente inscrições e impede novos convites/cadastros. Após primeiro
+início de execução ou partida,
 cadastro/alteração/confirmação/cancelamento individual são bloqueados; consulta
-própria permanece até expiração da credencial. O ciclo de execução é a etapa #31.
+própria permanece até expiração da credencial. Ciclo de execução implementado no
+incremento 012: excursoes-execucao-api.md.
 
 ## Persistência e proteção
 
@@ -87,4 +89,5 @@ logs de headers/corpos sensíveis. Sem SMS, email ou push automático nesta etap
 Testes H2/PostgreSQL e HTTP real cobrem três modos, expiração, IDOR, repetição,
 última vaga concorrente, mesma credencial concorrente, confirmação/cancelamento,
 edição segura e recusa de acesso administrativo/GPS por credencial individual.
-Roteiro operacional/OR-Tools/check-in/desembarque e notificações ainda são #31/#46/#47.
+Roteiro OR-Tools e execução estão em excursoes-roteiro-api.md/excursoes-execucao-api.md.
+Check-in/desembarque compartilhados e notificações continuam pendentes #46/#47.

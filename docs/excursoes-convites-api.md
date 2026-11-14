@@ -18,7 +18,8 @@ Somente esse método/caminho é público. Resposta inclui título, destino, data
 modo e paradas autorizadas; não inclui organizador/telefone, origem da garagem,
 participantes, pins residenciais, inscrição individual ou GPS. Não aceita token
 via query/path. Convite inválido, expirado, revogado ou excursão indisponível
-retorna o mesmo 404. Cancelar excursão ou passar a partida invalida a consulta.
+retorna o mesmo 404. Cancelar excursão, iniciar execução ou passar a partida
+invalida a consulta.
 
 O frontend/webapp deve construir o link de sua página com token em fragmento
 local e enviá-lo ao backend no header. Este backend não inventa domínio web nem

@@ -34,5 +34,6 @@ mantém tabelas e dados; não executar DROP.
 
 O incremento 011 da #30 bloqueia mudanças de modo, paradas/horários/endereço
 quando há reserva ativa e impede capacidade abaixo da ocupação. Consulte
-`excursoes-inscricoes-api.md`. Planejamento/OR-Tools, execução e controle físico são etapas #31/#46.
+`excursoes-inscricoes-api.md`. Planejamento/OR-Tools e execução persistida estão
+em excursoes-roteiro-api.md/excursoes-execucao-api.md. Controle físico continua #46.
 Não interpretar definição de coleta como inscrição ou embarque confirmado.

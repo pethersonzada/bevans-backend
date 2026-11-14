@@ -42,7 +42,7 @@ public class NotificacaoService {
         if(outbox.existsByChave(evento.chave()))return;
         OutboxNotificacao o=new OutboxNotificacao();o.chave=evento.chave();o.tipo=evento.tipo();
         o.operacaoId=evento.operacaoId();o.registroId=evento.registroId();
-        if(o.registroId!=null)o.origem=registros.findById(o.registroId).orElseThrow().origem;
+        if(o.registroId!=null&&!ContextoProximidadeService.TIPOS.contains(evento.tipo()))o.origem=registros.findById(o.registroId).orElseThrow().origem;
         o.criadaEm=clock.instant();o.proximaTentativa=o.criadaEm;outbox.save(o);
         resumo(evento);
     }
@@ -50,8 +50,8 @@ public class NotificacaoService {
         String tipo=null;
         if("VIAGEM_INICIADA".equals(evento.tipo())&&registros.countByOperacaoIdAndEstado(evento.operacaoId(),EstadoOperacional.AGUARDANDO)>0)tipo="PASSAGEIROS_AGUARDANDO";
         if("EMBARQUE_CONFIRMADO".equals(evento.tipo())){
-            var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(evento.operacaoId());
-            if(!rs.isEmpty()&&rs.stream().allMatch(r->r.estado==EstadoOperacional.EMBARCADO||r.estado==EstadoOperacional.DESEMBARCADO))tipo="TODOS_EMBARCARAM";
+            long total=registros.countByOperacaoId(evento.operacaoId());
+            if(total>0&&total==registros.countByOperacaoIdAndEstadoIn(evento.operacaoId(),Set.of(EstadoOperacional.EMBARCADO,EstadoOperacional.DESEMBARCADO)))tipo="TODOS_EMBARCARAM";
         }
         if(tipo==null)return;String chave="RESUMO:"+evento.operacaoId()+":"+tipo;if(outbox.existsByChave(chave))return;
         var o=new OutboxNotificacao();o.chave=chave;o.tipo=tipo;o.operacaoId=evento.operacaoId();o.usuarioId=operacoes.findById(o.operacaoId).orElseThrow().motorista.getId();o.criadaEm=clock.instant();o.proximaTentativa=o.criadaEm;outbox.save(o);
@@ -75,23 +75,24 @@ public class NotificacaoService {
         if(ContextoProximidadeService.TIPOS.contains(evento.tipo)&&!proximidade.valido(evento.operacaoId,evento.registroId,evento.tipo,evento.criadaEm)){evento.estado="DESCARTADA";return;}
         OperacaoViagem op=operacoes.findById(evento.operacaoId).orElseThrow();
         if(evento.usuarioId!=null){salvar(evento,op,evento.usuarioId,null,agora);evento.estado="PROCESSADA";return;}
-        var participantes=registros.findByOperacaoIdOrderByOrdemAscIdAsc(op.id);
+        var participantes=registros.resumos(op.id);
+        Set<Long> aprovados=op.viagem==null?Set.of():new HashSet<>(vinculos.idsAprovados(op.viagem.getTurma().getId()));
         if(evento.registroId!=null){
-            var registro=participantes.stream().filter(r->r.id.equals(evento.registroId)).findFirst().orElseThrow();
-            destinatario(evento,op,registro,agora);
+            var registro=participantes.stream().filter(r->r.getId().equals(evento.registroId)).findFirst().orElseThrow();
+            destinatario(evento,registro,aprovados,agora,op);
             if(!ContextoProximidadeService.TIPOS.contains(evento.tipo)&&!"MOTORISTA".equals(evento.origem))salvar(evento,op,op.motorista.getId(),null,agora);
         }else{
-            for(var registro:participantes)destinatario(evento,op,registro,agora);
+            for(var registro:participantes)destinatario(evento,registro,aprovados,agora,op);
             salvar(evento,op,op.motorista.getId(),null,agora);
         }
         evento.estado="PROCESSADA";
     }
-    private void destinatario(OutboxNotificacao e,OperacaoViagem op,RegistroOperacional r,Instant agora){
-        if(r.aluno!=null){
-            if(op.viagem==null||!vinculos.existsByTurmaIdAndAlunoIdAndStatus(op.viagem.getTurma().getId(),r.aluno.getId(),"APROVADO"))return;
-            salvar(e,op,r.aluno.getId(),null,agora);
-        }else if(r.inscricao!=null&&(r.inscricao.getEstado()==StatusInscricaoExcursao.CONFIRMADA||"VIAGEM_CANCELADA".equals(e.tipo))){
-            salvar(e,op,null,r.inscricao.getId(),agora);
+    private void destinatario(OutboxNotificacao e,RegistroOperacionalRepository.Resumo r,Set<Long> aprovados,Instant agora,OperacaoViagem op){
+        if(r.getAlunoId()!=null){
+            if(!aprovados.contains(r.getAlunoId()))return;
+            salvar(e,op,r.getAlunoId(),null,agora);
+        }else if(r.getInscricaoId()!=null&&(r.getInscricaoEstado()==StatusInscricaoExcursao.CONFIRMADA||"VIAGEM_CANCELADA".equals(e.tipo))){
+            salvar(e,op,null,r.getInscricaoId(),agora);
         }
     }
     private void salvar(OutboxNotificacao e,OperacaoViagem op,Long usuario,Long inscricao,Instant agora){

@@ -19,17 +19,15 @@ public class ContextoProximidadeService {
         if(o.execucao.getEstado()!=EstadoExecucaoExcursao.EM_ANDAMENTO||o.execucao.getExcursao().getEstado()==EstadoExcursao.CANCELADA)return null;
         return excursoes.findById(o.referenciaId).orElse(null);
     }
-    public boolean autorizado(OperacaoViagem o,RegistroOperacional r){return r.aluno!=null?
-        o.viagem!=null&&vinculos.existsByTurmaIdAndAlunoIdAndStatus(o.viagem.getTurma().getId(),r.aluno.getId(),"APROVADO"):
-        r.inscricao!=null&&r.inscricao.getEstado()==StatusInscricaoExcursao.CONFIRMADA;}
     @Transactional(readOnly=true) public Map<Long,String> alertas(Long operacaoId){
         var o=operacoes.findById(operacaoId).orElseThrow();var p=gps(o);
         if(!"ATUALIZADA".equals(RegrasGps.estado(true,p,clock))||p.getPrecisao()==null||p.getPrecisao()>50)return Map.of();
-        var esperados=registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id).stream().filter(r->r.estado==EstadoOperacional.AGUARDANDO&&autorizado(o,r)).toList();
-        if(esperados.isEmpty())return Map.of();int ordem=esperados.getFirst().ordem;var resultado=new LinkedHashMap<Long,String>();
-        for(var r:esperados){if(r.ordem!=ordem)break;double distancia=metros(p.getLatitude(),p.getLongitude(),r.latitude,r.longitude)+p.getPrecisao();
+        Set<Long> aprovados=o.viagem==null?Set.of():new HashSet<>(vinculos.idsAprovados(o.viagem.getTurma().getId()));
+        var esperados=registros.resumos(o.id).stream().filter(r->r.getEstado()==EstadoOperacional.AGUARDANDO&&(r.getAlunoId()!=null?aprovados.contains(r.getAlunoId()):r.getInscricaoEstado()==StatusInscricaoExcursao.CONFIRMADA)).toList();
+        if(esperados.isEmpty())return Map.of();int ordem=esperados.getFirst().getOrdem();var resultado=new LinkedHashMap<Long,String>();
+        for(var r:esperados){if(r.getOrdem()!=ordem)break;double distancia=metros(p.getLatitude(),p.getLongitude(),r.getLatitude(),r.getLongitude())+p.getPrecisao();
             String tipo=distancia<=50?"VAN_CHEGOU":distancia<=200?"VOCE_E_PROXIMO":distancia<=500?"VAN_APROXIMANDO":null;
-            if(tipo!=null)resultado.put(r.id,tipo);
+            if(tipo!=null)resultado.put(r.getId(),tipo);
         }return resultado;
     }
     @Transactional public boolean valido(Long operacao,Long registro,String tipo,Instant criado){

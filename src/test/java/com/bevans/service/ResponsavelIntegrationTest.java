@@ -47,6 +47,7 @@ class ResponsavelIntegrationTest {
         prova.comprovada=false;assertThrows(AccessDeniedException.class,()->service.localizacao(id,viagem,r.getFirebaseUid()));prova.comprovada=true;
         v=service.revogar(id,r.getFirebaseUid(),new ResponsavelDTO.Revogar(v.versao()));assertEquals(EstadoResponsabilidade.REVOGADO,v.estado());
         assertThrows(AccessDeniedException.class,()->service.operacao(id,viagem,r.getFirebaseUid()));assertEquals(3,service.historico(id,p.getFirebaseUid(),0,20).getTotalElements());
+        assertEquals(1,service.listar(r.getFirebaseUid(),0,1).getTotalElements());
     }
     @Test void consentimentoSemComprovacaoNaoLiberaDadosEAdaptadorPadraoNega(){
         assertFalse(new VerificacaoResponsabilidadePendente().verificar("r","p").comprovada());prova.comprovada=false;

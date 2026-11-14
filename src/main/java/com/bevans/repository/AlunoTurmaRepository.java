@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface AlunoTurmaRepository
         extends JpaRepository<AlunoTurma, Long> {
+    @Query("select v.aluno.id from AlunoTurma v where v.turma.id=:turma and v.status='APROVADO'")
+    List<Long> idsAprovados(@Param("turma")Long turma);
 
     long countByTurmaIdAndStatus(Long turmaId, String status);
 

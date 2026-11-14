@@ -41,6 +41,7 @@ class OperacaoIntegrationTest {
     @Autowired CredencialInscricaoExcursaoRepository credenciaisInscricao;
     @Autowired PosicaoViagemService gpsViagem;@Autowired ContextoProximidadeService contextoProximidade;
     @Autowired CancelamentoViagemService cancelamentoViagem;@Autowired TurmaService turmaService;
+    @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
     private record Cenario(Turma turma,Usuario dono,Usuario aluno){}
     private Usuario usuario(String tipo){String id=UUID.randomUUID().toString();var u=new Usuario();u.setNome(id);u.setTelefone(id);u.setEmail(id+"@test.invalid");u.setFirebaseUid(id);u.setTipo(tipo);return usuarios.save(u);}
     private Cenario cenario(){
@@ -272,5 +273,14 @@ class OperacaoIntegrationTest {
         var c=cenario();var t=c.turma();t.setOrigemLatitude(null);t.setOrigemLongitude(null);turmas.save(t);long antes=operacoes.count();
         assertThrows(IllegalArgumentException.class,()->viagens.iniciarRota(t.getId(),"IDA"));
         assertTrue(viagemRepo.findFirstByTurmaIdAndStatus(t.getId(),"EM_ANDAMENTO").isEmpty());assertEquals(antes,operacoes.count());
+    }
+    @Test void consultaDeProximidadeNaoCarregaPerfilOuMatriculaPorPassageiro(){
+        var c=cenario();Long viagem=iniciar(c,"IDA");var op=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,viagem).orElseThrow();var base=registros.findByOperacaoIdOrderByOrdemAscIdAsc(op.id).getFirst();
+        // Fixture de volume: registros esperados já persistidos, sem invocar replanejamento da API.
+        for(int n=0;n<8;n++){var a=usuario("PASSAGEIRO");var v=new AlunoTurma();v.setAluno(a);v.setTurma(c.turma());v.setStatus("APROVADO");vinculos.save(v);var r=new RegistroOperacional();r.operacao=op;r.aluno=a;r.nome=a.getNome();r.ordem=base.ordem;r.latitude=base.latitude;r.longitude=base.longitude;registros.saveAndFlush(r);}
+        gpsViagem.enviar(viagem,c.dono().getFirebaseUid(),new PosicaoRequest("volume",base.latitude,base.longitude,clock.instant(),5.0,null));
+        var estatisticas=entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();estatisticas.setStatisticsEnabled(true);estatisticas.clear();
+        try{assertEquals(9,contextoProximidade.alertas(op.id).size());assertTrue(estatisticas.getPrepareStatementCount()<=6,"Consultas devem ser limitadas, não uma por passageiro: "+estatisticas.getPrepareStatementCount());}
+        finally{estatisticas.setStatisticsEnabled(false);}
     }
 }

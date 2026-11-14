@@ -42,7 +42,7 @@ jobs:
         env:
           PGPASSWORD: local-test-only
         run: |
-          for schema in capacity_service publication_service boarding_service catalog_service favorite_service gps_service excursion_service; do
+          for schema in capacity_service publication_service boarding_service catalog_service favorite_service gps_service excursion_service invite_service; do
             psql -h 127.0.0.1 -p 55435 -U postgres -d bevans_validation -v ON_ERROR_STOP=1 -c "CREATE SCHEMA $schema"
           done
 

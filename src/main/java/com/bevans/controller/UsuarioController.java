@@ -191,6 +191,7 @@ listarPassageiros() {
         if (idUsuario == null) {
             throw new IllegalArgumentException("idUsuario não pode ser nulo");
         }
+        com.bevans.service.EnderecoService.validarCoordenadas(request.getLatitude(), request.getLongitude());
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado: " + idUsuario));
         usuario.setLatitude(request.getLatitude());

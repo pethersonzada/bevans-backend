@@ -45,7 +45,7 @@ public class EnderecoService {
         return enderecoRepository.findByUsuarioId(usuarioId);
     }
 
-    private void validarCoordenadas(Double latitude, Double longitude) {
+    public static void validarCoordenadas(Double latitude, Double longitude) {
         if (latitude == null || longitude == null
                 || !Double.isFinite(latitude) || !Double.isFinite(longitude)
                 || latitude < -90 || latitude > 90

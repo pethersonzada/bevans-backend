@@ -22,6 +22,7 @@ class OpenApiIntegrationTest {
         assertTrue(paths.path("/publico/excursoes/inscricoes").path("post").path("security").get(0).has("Convite"));assertTrue(paths.path("/publico/excursoes/inscricoes").path("post").path("security").get(0).has("Inscricao"));
         assertFalse(paths.path("/publico/excursoes/operacao/{id}/localizacao").path("get").path("security").toString().contains("Convite"));
         assertTrue(paths.path("/excursoes/{id}/convites").path("post").path("responses").has("201"));assertTrue(paths.path("/rotas-publicas/{id}/favorito").path("put").path("responses").has("204"));
+        assertTrue(paths.path("/usuarios/{id}").path("delete").path("responses").has("202"));
         assertTrue(paths.path("/viagens/{id}/localizacao/eventos").path("get").path("responses").path("200").path("content").has("text/event-stream"));
         assertFalse(api.at("/components/schemas/Usuario/properties").has("telefone"));assertTrue(api.at("/components/schemas/PerfilUsuarioDTO/properties").has("telefone"));assertTrue(api.at("/components/schemas/ErroAPI/properties").has("erro"));
         assertTrue(paths.path("/notificacoes").path("get").path("parameters").toString().contains("pagina"));

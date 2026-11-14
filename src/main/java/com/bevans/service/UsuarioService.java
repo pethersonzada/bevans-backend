@@ -16,6 +16,8 @@ import com.bevans.repository.ViagemRepository;
 
 @Service
 public class UsuarioService {
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private ExclusaoContaService exclusaoContas;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.bevans.repository.ExclusaoContaRepository exclusoes;
 
     private final UsuarioRepository usuarioRepository;
     private final PresencaRepository presencaRepository;
@@ -35,7 +37,7 @@ public class UsuarioService {
             throw new ConflitoException("Telefone já cadastrado");
         }
         
-        if(usuario.getFirebaseUid()!=null&&usuarioRepository.findByFirebaseUid(usuario.getFirebaseUid()).isPresent())throw new ConflitoException("Identidade Firebase já cadastrada");
+        if(usuario.getFirebaseUid()!=null&&(usuarioRepository.findByFirebaseUid(usuario.getFirebaseUid()).isPresent()||exclusoes!=null&&exclusoes.existsByFirebaseUid(usuario.getFirebaseUid())))throw new ConflitoException("Identidade Firebase indisponível ou já cadastrada");
         try{return usuarioRepository.saveAndFlush(usuario);}catch(org.springframework.dao.DataIntegrityViolationException ex){throw new ConflitoException("Identidade, email ou telefone já cadastrados");}
     }
 
@@ -79,22 +81,7 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado no sistema."));
         
-        if ("MOTORISTA".equals(usuario.getTipo())) {
-            if (viagemRepository.existsByTurmaMotoristaIdAndStatus(id, "EM_ANDAMENTO")) {
-                throw new ConflitoException("Não é possível excluir a conta com uma rota em andamento. Encerre a viagem primeiro.");
-            }
-            viagemRepository.deleteAllByTurmaMotoristaId(id);
-        }
-
-        try {
-            if (usuario.getFirebaseUid() != null && !usuario.getFirebaseUid().isBlank()) {
-                FirebaseAuth.getInstance().deleteUser(usuario.getFirebaseUid());
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException("Falha na exclusão da conta no Firebase.", e);
-        }
-
-        presencaRepository.deleteAllByUsuarioId(id); 
-        usuarioRepository.deleteById(id);
+        if(exclusaoContas==null)throw new ConflitoException("Fluxo de exclusão indisponível");
+        exclusaoContas.solicitar(usuario.getId());
     }
 }

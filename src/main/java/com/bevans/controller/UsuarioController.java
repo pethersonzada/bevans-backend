@@ -209,11 +209,12 @@ listarPassageiros() {
         return ResponseEntity.ok(PerfilUsuarioDTO.proprio(usuarioAtualizado));
     }
 
-    @Operation(summary = "Excluir Usuário", description = "Apaga permanentemente a conta do usuário do sistema.")
+    @Operation(summary = "Solicitar exclusão da própria conta", description = "Somente conta sem dados vinculados; registra tarefa remota após commit, sem apagar histórico em cascata.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="202",description="Remoção local e tarefa remota registradas; Firebase ainda pode estar pendente")
     @DeleteMapping("/{id}")
     @PreAuthorize("@access.own(#p0)")
     public ResponseEntity<?> excluirConta(@PathVariable Long id) {
         usuarioService.excluirUsuario(id);
-        return ResponseEntity.ok(Map.of("mensagem", "Conta excluída com sucesso."));
+        return ResponseEntity.accepted().body(Map.of("mensagem", "Remoção local registrada; exclusão no provedor pendente de processamento autorizado."));
     }
 }

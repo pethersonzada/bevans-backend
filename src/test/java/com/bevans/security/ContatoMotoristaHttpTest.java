@@ -32,4 +32,10 @@ class ContatoMotoristaHttpTest extends BaseAutorizacaoHttpTest {
             mvc.perform(post("/usuarios/cadastrar").header("Authorization","Bearer valido").contentType("application/json").content("{\"email\":\"r@test.invalid\",\"firebaseUid\":\"terceiro\",\"tipo\":\"RESPONSAVEL\"}")) .andExpect(status().isForbidden());
         }verify(usuarioService).cadastrarUsuario(argThat(u->u.getId()==null&&u.getTipo().equals("RESPONSAVEL")&&u.getFirebaseUid().equals("responsavel")));
     }
+    @Test void exclusaoPropriaRetornaPendenciaSemPrometerRemocaoRemota()throws Exception{
+        identidade("proprio",usuario(1,"PASSAGEIRO"));try(var scope=firebase("valido","proprio")){
+            mvc.perform(delete("/usuarios/1").header("Authorization","Bearer valido")).andExpect(status().isAccepted()).andExpect(jsonPath("$.mensagem").value(org.hamcrest.Matchers.containsString("pendente")));
+            mvc.perform(delete("/usuarios/2").header("Authorization","Bearer valido")).andExpect(status().isForbidden());
+        }verify(usuarioService).excluirUsuario(1L);verify(usuarioService,never()).excluirUsuario(2L);
+    }
 }

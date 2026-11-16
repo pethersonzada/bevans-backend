@@ -400,7 +400,7 @@ public class RotaController {
 
     @Operation(summary = "Otimizar Rota")
     @GetMapping("/otimizar")
-    @PreAuthorize("@access.driverOfTurma(#p1)")
+    @PreAuthorize("#p1 == null or @access.driverOfTurma(#p1)")
     public CompletableFuture<ResponseEntity<List<PassageiroRotaDTO>>>
     otimizarRota(
             @RequestParam(required = false) String sentido,

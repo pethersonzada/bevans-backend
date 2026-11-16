@@ -13,6 +13,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = RotaController.class)
 @Import({SecurityConfig.class, AccessPolicy.class})
 class RotaPermissoesExtrasHttpTest extends BaseAutorizacaoHttpTest {
+    @Test
+    void motoristaComTurmaIdAusenteRecebe400() throws Exception {
+        identidade("motor-1", usuario(1, "MOTORISTA"));
+        try (var ignored = firebase("valido", "motor-1")) {
+            mvc.perform(get("/rota/otimizar")
+                    .param("sentido", "ida")
+                    .header("Authorization", "Bearer valido"))
+                .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(rotaService);
+    }
+
     @Test void semTokenNaoPodeOtimizar() throws Exception {
         mvc.perform(get("/rota/otimizar").param("turmaId", "13").param("sentido", "IDA"))
             .andExpect(status().isUnauthorized());

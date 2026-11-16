@@ -1,9 +1,14 @@
 package com.bevans.service;
 
 import com.bevans.model.ExecucaoExcursao;
+import com.bevans.model.EstadoExcursao;
+import com.bevans.model.ModoColetaExcursao;
+import com.bevans.dto.ExcursaoDTO;
 import com.bevans.repository.ExecucaoExcursaoRepository;
 import com.bevans.repository.InscricaoExcursaoRepository;
 import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -64,4 +69,31 @@ class RoteiroExcursaoConsultaTest {
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, erro.getStatusCode());
     }
+    @Test
+    void rascunhoComPartidaPassadaAindaPermiteConsultarPrevia() {
+        var excursao = new ExcursaoDTO(
+                7L, "Viagem de teste", "Destino", -8.1, -34.95,
+                "Origem", -8.05, -34.9,
+                Instant.parse("2025-05-01T10:00:00Z"), null,
+                12, EstadoExcursao.RASCUNHO, 0L,
+                Instant.parse("2025-04-01T10:00:00Z"),
+                ModoColetaExcursao.PORTA_A_PORTA, List.of()
+        );
+        when(excursoes.consultar(7L, "motorista")).thenReturn(excursao);
+        when(execucoes.findByExcursaoIdAndSentido(7L, "IDA")).thenReturn(Optional.empty());
+        when(inscricoes.findByExcursaoIdAndEstadoOrderByIdAsc(
+                7L, com.bevans.model.StatusInscricaoExcursao.CONFIRMADA
+        )).thenReturn(List.of());
+
+        var pontos = service.planejamento(7L, "motorista", "IDA", false);
+
+        assertEquals(2, pontos.size());
+        assertEquals("Origem", pontos.get(0).nome());
+        assertEquals("Destino", pontos.get(1).nome());
+
+        var bloqueio = assertThrows(ResponseStatusException.class,
+                () -> service.paraInicio(7L, "motorista", "IDA", false));
+        assertEquals(HttpStatus.CONFLICT, bloqueio.getStatusCode());
+    }
+
 }

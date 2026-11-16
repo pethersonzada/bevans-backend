@@ -34,6 +34,7 @@ class PosicaoViagemIntegrationTest {
     @Autowired TurmaRepository turmas;
     @Autowired AlunoTurmaRepository vinculos;
     @Autowired PosicaoViagemRepository posicoes;
+    @Autowired PresencaRepository presencas;
     @Autowired Clock clock;
     private Relogio relogio(){return (Relogio)clock;}
     private record Cenario(Long viagem,Long turma,String motorista,String passageiro,Long vinculo){}
@@ -42,6 +43,14 @@ class PosicaoViagemIntegrationTest {
         relogio().agora=Instant.now().plusSeconds(1);
         var m=usuario("MOTORISTA");var p=usuario("PASSAGEIRO");Turma t=new Turma();t.setNome("Privada");t.setMotorista(m);t.setCapacidade(12);t=turmas.save(t);
         AlunoTurma v=new AlunoTurma();v.setTurma(t);v.setAluno(p);v.setStatus("APROVADO");v=vinculos.save(v);
+        // Confirmação explícita de ausência para testar GPS sem passageiros esperados.
+        var presenca = new Presenca();
+        presenca.setTurma(t);
+        presenca.setUsuario(p);
+        presenca.setData(LocalDate.now(clock));
+        presenca.setStatus("NAO_VOU");
+        presencas.saveAndFlush(presenca);
+
         viagens.iniciarRota(t.getId(),"IDA");Long id=viagemRepository.findFirstByTurmaIdAndStatus(t.getId(),"EM_ANDAMENTO").orElseThrow().getId();
         return new Cenario(id,t.getId(),m.getFirebaseUid(),p.getFirebaseUid(),v.getId());
     }

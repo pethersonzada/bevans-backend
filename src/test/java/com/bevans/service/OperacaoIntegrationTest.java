@@ -53,6 +53,98 @@ class OperacaoIntegrationTest {
     private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);var v=viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow();assertEquals(clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),v.getIniciadaEm());return v.getId();}
     private OperacaoDTO.Alteracao estado(EstadoOperacional e,long versao){return new OperacaoDTO.Alteracao(e,false,versao,null);}
     private void distribuir(){for(int i=0;i<1000;i++){Long id=reservas.reservar();if(id==null)break;notificacoes.distribuir(id);} }
+
+    @Test
+    void privadaComPassageiroAprovadoSemPresencaNaoInicia() {
+        var c = cenario();
+
+        var presenca = presencas.findByUsuarioIdAndTurmaIdAndData(
+            c.aluno().getId(),
+            c.turma().getId(),
+            LocalDate.now(clock)
+        ).orElseThrow();
+
+        presencas.delete(presenca);
+        presencas.flush();
+
+        assertThrows(
+            com.bevans.exception.ConflitoException.class,
+            () -> viagens.iniciarRota(c.turma().getId(), "IDA")
+        );
+
+        assertTrue(
+            viagemRepo.findFirstByTurmaIdAndStatus(
+                c.turma().getId(), "EM_ANDAMENTO"
+            ).isEmpty()
+        );
+    }
+
+    @Test
+    void privadaComOutroAprovadoSemConfirmacaoBloqueiaInicio() {
+        var c = cenario();
+        var outro = usuario("PASSAGEIRO");
+
+        var vinculo = new AlunoTurma();
+        vinculo.setTurma(c.turma());
+        vinculo.setAluno(outro);
+        vinculo.setStatus("APROVADO");
+        vinculos.saveAndFlush(vinculo);
+
+        assertThrows(
+            com.bevans.exception.ConflitoException.class,
+            () -> viagens.iniciarRota(c.turma().getId(), "IDA")
+        );
+
+        assertTrue(
+            viagemRepo.findFirstByTurmaIdAndStatus(
+                c.turma().getId(), "EM_ANDAMENTO"
+            ).isEmpty()
+        );
+    }
+
+    @Test
+    void privadaComNaoVouExplicitoNaoIncluiPassageiro() {
+        var c = cenario();
+
+        var presenca = presencas.findByUsuarioIdAndTurmaIdAndData(
+            c.aluno().getId(),
+            c.turma().getId(),
+            LocalDate.now(clock)
+        ).orElseThrow();
+
+        presenca.setStatus("NAO_VOU");
+        presencas.saveAndFlush(presenca);
+
+        Long id = iniciar(c, "IDA");
+
+        var painel = service.painel(
+            TipoOperacao.VIAGEM,
+            id,
+            c.dono().getFirebaseUid()
+        );
+
+        assertEquals(0, painel.contadores().esperados());
+    }
+
+    @Test
+    void privadaComPresencaConfirmadaIncluiPassageiroNoSnapshot() {
+        var c = cenario();
+
+        Long viagemId = iniciar(c, "IDA");
+
+        var painel = service.painel(
+            TipoOperacao.VIAGEM,
+            viagemId,
+            c.dono().getFirebaseUid()
+        );
+
+        assertEquals(1, painel.contadores().esperados());
+        assertEquals(
+            c.aluno().getId(),
+            painel.registros().get(0).alunoId()
+        );
+    }
+
     @Test void centralPersisteDeduplicaIsolaLeituraERevalidaVinculo(){
         var c=cenario();Long id=iniciar(c,"IDA");distribuir();
         var lista=notificacoes.listar(c.aluno().getFirebaseUid(),0,20);

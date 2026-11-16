@@ -34,6 +34,15 @@ public class ViagemService {
         this.posicoes=posicoes;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.bevans.repository.AlunoTurmaRepository vinculos;
+
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.bevans.repository.RotaPublicaRepository rotasPublicas;
+
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.bevans.repository.PresencaRepository presencas;
+
     @Transactional
     public void iniciarRota(Long turmaId, String sentido) {
         Turma turma = turmaRepository.lockById(turmaId)
@@ -43,6 +52,32 @@ public class ViagemService {
         
         if (viagemAtiva.isPresent()) {
             throw new ConflitoException("Já existe uma rota em andamento exclusivamente para esta turma.");
+        }
+        // Rotas privadas: não iniciar silenciosamente com passageiros
+        // aprovados que ainda não confirmaram a presença do dia.
+        // Rotas públicas usam solicitações de embarque próprias.
+        if (vinculos != null && rotasPublicas != null && presencas != null
+                && rotasPublicas.findByTurmaId(turmaId).isEmpty()
+                && vinculos.countByTurmaIdAndStatus(turmaId, "APROVADO") > 0) {
+            java.time.LocalDate data = java.time.LocalDate.now(clock);
+            var confirmacoes = presencas.findByDataAndTurmaId(data, turmaId);
+            var registrados = confirmacoes.stream()
+                .map(p -> p.getUsuario().getId())
+                .collect(java.util.stream.Collectors.toSet());
+
+            var semConfirmacao = vinculos.idsAprovados(turmaId)
+                .stream()
+                .filter(id -> !registrados.contains(id))
+                .toList();
+
+            if (!semConfirmacao.isEmpty()) {
+                throw new ConflitoException(
+                    "Existem " + semConfirmacao.size()
+                    + " passageiros aprovados sem confirmação "
+                    + "para hoje. Confirme a presença e o ponto "
+                    + "de embarque, ou registre NAO_VOU."
+                );
+            }
         }
         if(coletas!=null&&coletas.getIfAvailable()!=null)coletas.getObject().validarInicio(turmaId,sentido);
 

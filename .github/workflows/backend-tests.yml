@@ -48,3 +48,12 @@ jobs:
 
       - name: Validar PostgreSQL e migrações
         run: mvn --batch-mode --no-transfer-progress -Ppostgres-validation verify
+
+      - name: Validar privilégios da role da aplicação
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "55435"
+          PGDATABASE: bevans_validation
+          PGUSER: postgres
+          PGPASSWORD: local-test-only
+        run: bash scripts/test-db-permissions.sh

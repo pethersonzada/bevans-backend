@@ -1,0 +1,21 @@
+\set ON_ERROR_STOP on
+
+GRANT USAGE ON SCHEMA :"schema_name" TO :"app_role";
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON ALL TABLES IN SCHEMA :"schema_name"
+TO :"app_role";
+
+GRANT USAGE, SELECT
+ON ALL SEQUENCES IN SCHEMA :"schema_name"
+TO :"app_role";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role"
+IN SCHEMA :"schema_name"
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLES TO :"app_role";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"owner_role"
+IN SCHEMA :"schema_name"
+GRANT USAGE, SELECT
+ON SEQUENCES TO :"app_role";

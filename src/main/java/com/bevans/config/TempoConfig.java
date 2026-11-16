@@ -6,7 +6,7 @@ import java.time.*;
 @Configuration
 public class TempoConfig {
     @Bean
-    public Clock clock(@Value("${app.time-zone:America/Sao_Paulo}") String zona) {
+    public Clock clock(@Value("${app.time-zone:America/Recife}") String zona) {
         return Clock.system(ZoneId.of(zona));
     }
 }

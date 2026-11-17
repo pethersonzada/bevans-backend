@@ -11,6 +11,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers=ExecucaoExcursaoController.class) @Import({SecurityConfig.class,AccessPolicy.class})
 class ExecucaoExcursaoHttpTest extends BaseAutorizacaoHttpTest {
     @MockBean ExecucaoExcursaoService service;
+    @Test void conflitoMantemMensagemLegadaEAcrescentaCodigoAcionavel() throws Exception {
+        identidade("motorista",usuario(1,"MOTORISTA"));
+        when(service.iniciar(eq(1L),eq("motorista"),eq("IDA"),anyBoolean())).thenThrow(new com.bevans.exception.ConflitoOperacionalException("ESTADO_INVALIDO","Publique a excursão antes de iniciar."));
+        try(var ignored=firebase("valido","motorista")){
+            mvc.perform(post("/excursoes/1/execucoes").param("sentido","IDA").header("Authorization","Bearer valido"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.codigo").value("ESTADO_INVALIDO"))
+                .andExpect(jsonPath("$.erro").value("Publique a excursão antes de iniciar."));
+        }
+    }
     @Test void inicioExigeMotoristaENaoAceitaCredencialDeInscricao() throws Exception {
         mvc.perform(post("/excursoes/1/execucoes").header("X-Inscricao","token")).andExpect(status().isUnauthorized());
         identidade("aluno",usuario(2,"PASSAGEIRO"));try(var ignored=firebase("valido","aluno")){

@@ -196,4 +196,26 @@ class InscricaoExcursaoIntegrationTest {
         assertEquals("ORIGEM",roteiros.planejamento(c.id(),c.uid(),"IDA",false).get(0).tipo());
         assertEquals(EstadoExecucaoExcursao.EM_ANDAMENTO,execucoes.iniciar(c.id(),c.uid(),"IDA",false).estado());
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(longs={-1,0,1,86400})
+    void previaEInicioAntesNoHorarioEAposPartidaPreservamConfirmados(long atraso){
+        var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);
+        var i=service.solicitar(c.convite().token(),chave(c),porta("Confirmada"));service.confirmar(c.id(),i.id(),c.uid());
+        var prevista=excursoes.consultar(c.id(),c.uid()).partidaEm();
+        ((ConviteExcursaoIntegrationTest.Relogio)clock).agora=prevista.plusSeconds(atraso);
+        var previa=roteiros.planejamento(c.id(),c.uid(),"IDA",true);
+        assertEquals(List.of(i.id()),previa.stream().flatMap(p->p.participantes().stream()).map(PontoRoteiroExcursaoDTO.Participante::inscricaoId).toList());
+        var x=execucoes.iniciar(c.id(),c.uid(),"IDA",true);assertEquals(previa,x.pontos());
+        assertEquals(previa,roteiros.planejamento(c.id(),c.uid(),"IDA",false));
+        execucoes.finalizar(c.id(),x.id(),c.uid());assertEquals(previa,roteiros.planejamento(c.id(),c.uid(),"IDA",true));
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(ModoColetaExcursao.class)
+    void semInscritosPreservaParadasConfiguradasNoRoteiroSalvo(ModoColetaExcursao modo){
+        var c=cenario(12,modo);var antes=excursoes.consultar(c.id(),c.uid());
+        var pontos=roteiros.planejamento(c.id(),c.uid(),"IDA",false);
+        assertEquals(antes.paradas().size()+2,pontos.size());assertTrue(pontos.stream().allMatch(p->p.participantes().isEmpty()));
+        var x=execucoes.iniciar(c.id(),c.uid(),"IDA",false);assertEquals(pontos,x.pontos());
+        assertEquals(antes.paradas(),excursoes.consultar(c.id(),c.uid()).paradas());
+    }
 }

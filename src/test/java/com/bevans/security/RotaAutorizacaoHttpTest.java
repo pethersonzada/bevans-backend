@@ -73,7 +73,7 @@ class RotaAutorizacaoHttpTest {
     void semTokenNaoPodeIniciarRota() throws Exception {
         mvc.perform(post("/rota/iniciar")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"turmaId\":13,\"sentido\":\"IDA\"}"))
+                .content("{\"turmaId\":13,\"sentido\":\"IDA\",\"modalidade\":\"PRIVADA\"}"))
             .andExpect(status().isUnauthorized());
         verifyNoInteractions(viagemService);
     }
@@ -87,10 +87,10 @@ class RotaAutorizacaoHttpTest {
             mvc.perform(post("/rota/iniciar")
                     .header("Authorization", "Bearer valido")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"turmaId\":13,\"sentido\":\"IDA\"}"))
+                    .content("{\"turmaId\":13,\"sentido\":\"IDA\",\"modalidade\":\"PRIVADA\"}"))
                 .andExpect(status().isOk());
         }
-        verify(viagemService).iniciarRota(13L, "IDA");
+        verify(viagemService).iniciarRota(13L, "IDA","PRIVADA",null);
     }
 
     @Test
@@ -115,7 +115,7 @@ class RotaAutorizacaoHttpTest {
             mvc.perform(post("/rota/iniciar")
                     .header("Authorization", "Bearer valido")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"turmaId\":13,\"sentido\":\"IDA\"}"))
+                    .content("{\"turmaId\":13,\"sentido\":\"IDA\",\"modalidade\":\"PRIVADA\"}"))
                 .andExpect(status().isForbidden());
         }
         verifyNoInteractions(viagemService);

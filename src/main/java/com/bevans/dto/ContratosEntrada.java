@@ -12,5 +12,6 @@ public final class ContratosEntrada {
         @Schema(accessMode=Schema.AccessMode.WRITE_ONLY,description="Somente cadastro MOTORISTA, verificado contra segredo do servidor; nunca embutir no aplicativo")String codigoAcesso){}
     public record Login(@Schema(requiredMode=Schema.RequiredMode.REQUIRED,example="pessoa@example.invalid")String email){}
     public record InicioViagem(@Schema(requiredMode=Schema.RequiredMode.REQUIRED)Long turmaId,
-        @Schema(requiredMode=Schema.RequiredMode.REQUIRED,allowableValues={"IDA","VOLTA"})String sentido){}
+        @Schema(requiredMode=Schema.RequiredMode.REQUIRED,allowableValues={"IDA","VOLTA"})String sentido,
+        @Schema(requiredMode=Schema.RequiredMode.REQUIRED,allowableValues={"PRIVADA"})String modalidade){}
 }

@@ -60,7 +60,13 @@ public class OperacaoService {
         if(operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,v.getId()).isPresent())return;
         var o=nova(TipoOperacao.VIAGEM,v.getId(),v.getTurma().getMotorista(),v.getSentido());o.viagem=v;var vistos=new HashSet<Long>();
         LocalDate data=v.getIniciadaEm().atZone(clock.getZone()).toLocalDate();
-        var publica=publicas.findByTurmaId(v.getTurma().getId()).orElse(null);
+        if(!"PRIVADA".equals(v.getModalidade())&&!"PUBLICA".equals(v.getModalidade()))
+            throw conflito("Viagem antiga sem modalidade explícita; não é seguro reconstruir roteiro.");
+        var publica="PUBLICA".equals(v.getModalidade())
+            ?publicas.findById(v.getRotaPublicaId()).orElseThrow(()->conflito("Rota pública desta viagem não encontrada."))
+            :null;
+        if(publica!=null&&!java.util.Objects.equals(publica.getTurma().getId(),v.getTurma().getId()))
+            throw conflito("Rota pública de outra turma.");
         List<PontoColetaPrivadaDTO> rota;
         if(publica!=null){
             rota=roteiroPublico(publica,data,v.getSentido());

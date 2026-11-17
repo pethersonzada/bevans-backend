@@ -45,7 +45,21 @@ public class ViagemService {
 
     @Transactional
     public void iniciarRota(Long turmaId, String sentido) {
+        iniciarRota(turmaId,sentido,"PRIVADA",null);
+    }
+
+    @Transactional
+    public void iniciarRota(Long turmaId, String sentido, String modalidade, Long rotaPublicaId) {
         if(!"IDA".equals(sentido)&&!"VOLTA".equals(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
+        if("PRIVADA".equals(modalidade)){
+            if(rotaPublicaId!=null)throw new IllegalArgumentException("Viagem privada não aceita ID de publicação pública.");
+        }else if("PUBLICA".equals(modalidade)){
+            if(rotaPublicaId==null||rotasPublicas==null)throw new IllegalArgumentException("Informe a rota pública da viagem.");
+            var rota=rotasPublicas.findById(rotaPublicaId)
+                .orElseThrow(()->new RecursoNaoEncontradoException("Rota pública não encontrada."));
+            if(rota.getTurma()==null||!java.util.Objects.equals(rota.getTurma().getId(),turmaId))
+                throw new IllegalArgumentException("Rota pública não pertence à turma informada.");
+        }else throw new IllegalArgumentException("Informe modalidade PRIVADA ou PUBLICA.");
         Turma turma = turmaRepository.lockById(turmaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada no sistema."));
 
@@ -57,8 +71,7 @@ public class ViagemService {
         // Rotas privadas: não iniciar silenciosamente com passageiros
         // aprovados que ainda não confirmaram a presença do dia.
         // Rotas públicas usam solicitações de embarque próprias.
-        if (vinculos != null && rotasPublicas != null && presencas != null
-                && rotasPublicas.findByTurmaId(turmaId).isEmpty()
+        if ("PRIVADA".equals(modalidade) && vinculos != null && presencas != null
                 && vinculos.countByTurmaIdAndStatus(turmaId, "APROVADO") > 0) {
             java.time.LocalDate data = java.time.LocalDate.now(clock);
             var confirmacoes = presencas.findByDataAndTurmaId(data, turmaId);
@@ -80,12 +93,14 @@ public class ViagemService {
                 );
             }
         }
-        if(coletas!=null&&coletas.getIfAvailable()!=null)coletas.getObject().validarInicio(turmaId,sentido);
+        if("PRIVADA".equals(modalidade)&&coletas!=null&&coletas.getIfAvailable()!=null)
+            coletas.getObject().validarInicio(turmaId,sentido);
 
         Viagem novaViagem = new Viagem();
         novaViagem.setTurma(turma);
         novaViagem.setSentido(sentido);
         novaViagem.setStatus("EM_ANDAMENTO");
+        novaViagem.definirModalidade(modalidade,rotaPublicaId);
         novaViagem.registrarInicio(clock.instant(),clock.getZone());
 
         viagemRepository.saveAndFlush(novaViagem);
@@ -124,6 +139,8 @@ public class ViagemService {
             resposta.put("estado", "EM_ANDAMENTO");
             resposta.put("viagemId",v.getId());
             resposta.put("sentido", v.getSentido());
+            resposta.put("modalidade",v.getModalidade());
+            if(v.getRotaPublicaId()!=null)resposta.put("rotaPublicaId",v.getRotaPublicaId());
             resposta.put("turmaId", v.getTurma().getId());
             resposta.put("turmaNome", v.getTurma().getNome());
         } else {

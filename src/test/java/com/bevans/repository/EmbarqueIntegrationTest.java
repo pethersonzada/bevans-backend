@@ -71,7 +71,7 @@ class EmbarqueIntegrationTest {
         var pontos=service.planejamento(c.rota(),c.dono(),data(),"IDA",true);
         assertEquals(4,pontos.size());assertEquals(c.parada(),pontos.get(1).paradaId());
         assertEquals(1,rotas.consultar(c.rota()).paradas().size());
-        viagens.iniciarRota(c.turma(),"IDA");
+        viagens.iniciarRota(c.turma(),"IDA","PUBLICA",c.rota());
         assertThrows(SolicitacaoConflictException.class,()->rotas.permitirPontoExcepcional(c.rota(),c.dono(),true));
     }
     @Test void pinPendenteNaoEntraNaRotaEAprovadoContinuaPrivado() {
@@ -120,7 +120,7 @@ class EmbarqueIntegrationTest {
     }
     @Test void viagemAtivaBloqueiaSolicitacaoAnaliseCancelamentoEPlano() {
         var c=cenario(ModoRota.FLEXIVEL,12);Long aluno=usuario("PASSAGEIRO").getId();var e=service.solicitar(c.rota(),aluno,flexivel());
-        viagens.iniciarRota(c.turma(),"IDA");
+        viagens.iniciarRota(c.turma(),"IDA","PUBLICA",c.rota());
         assertThrows(SolicitacaoConflictException.class,()->service.solicitar(c.rota(),aluno,flexivel()));
         assertThrows(SolicitacaoConflictException.class,()->service.analisar(e.id(),c.dono(),StatusEmbarque.APROVADO));
         assertThrows(SolicitacaoConflictException.class,()->service.cancelar(e.id(),aluno));

@@ -31,7 +31,7 @@ public class ColetaPrivadaService {
     private Turma turma(Long id,String uid,boolean motorista,boolean lock){
         Usuario u=usuario(uid);Turma t=(lock?turmas.lockById(id):turmas.findById(id)).orElseThrow(this::ausente);
         if(lock)em.refresh(t,LockModeType.PESSIMISTIC_WRITE);
-        if(t.isExcluido())throw ausente();if(publicas.findByTurmaId(id).isPresent())throw conflito("Esta configuração pertence somente a turmas privadas.");
+        if(t.isExcluido())throw ausente();
         if(!dono(t,u)){if(motorista||!"PASSAGEIRO".equals(u.getTipo()))throw new AccessDeniedException("Turma de outro motorista.");aprovado(id,u.getId());}return t;
     }
     private void inativa(Long turma){if(viagens.existsByTurmaIdAndStatus(turma,"EM_ANDAMENTO"))throw conflito("Não altere coleta ou escolhas durante viagem ativa.");}
@@ -90,13 +90,12 @@ public class ColetaPrivadaService {
             var p=ps.stream().min(Comparator.<ParadaPrivada>comparingDouble(v->distancia(a.getLatitude(),a.getLongitude(),v.getLatitude(),v.getLongitude())).thenComparing(ParadaPrivada::getId)).orElse(null);
             if(p!=null)sugestao=new ColetaPrivadaDTO.Sugestao(dto(p),distancia(a.getLatitude(),a.getLongitude(),p.getLatitude(),p.getLongitude()),"HAVERSINE_LINHA_RETA");
         }
-        var v=viagens.findFirstByTurmaIdAndStatus(id,"EM_ANDAMENTO").filter(x->s.equals(x.getSentido())).orElse(null);
+        var v=viagens.findFirstByTurmaIdAndStatus(id,"EM_ANDAMENTO").filter(x->s.equals(x.getSentido())&&"PRIVADA".equals(x.getModalidade())).orElse(null);
         return new ColetaPrivadaDTO(id,s,c==null?ModoColetaPrivada.PORTA_A_PORTA:c.getModo(),c==null?0:c.getRevisao(),ps.stream().map(this::dto).toList(),escolhida,sugestao,v==null?null:v.getId(),v==null?null:gps.consultar(v.getId(),uid));
     }
     @Transactional(readOnly=true) public boolean usaParadas(Long id,String s){var c=coleta(id,s);return c!=null&&c.getModo()==ModoColetaPrivada.PARADAS_DEFINIDAS;}
     @Transactional public void prepararPresenca(Long id,Long aluno,String status){
         turmas.lockById(id).orElseThrow(this::ausente);inativa(id);aprovado(id,aluno);
-        if(publicas.findByTurmaId(id).isPresent())throw conflito("Rota pública utiliza solicitações de embarque, não presenças privadas.");
         for(String s:List.of("IDA","VOLTA"))if(PresencasEsperadas.inclui(status,s)&&usaParadas(id,s)){
             var c=coleta(id,s);if(escolhas.findByColetaIdAndAlunoId(c.getId(),aluno).filter(EscolhaParadaPrivada::isAtiva).filter(e->e.getParada().isAtiva()).isEmpty())throw conflito("Escolha uma parada para "+s+" antes de confirmar presença.");
         }
@@ -104,7 +103,11 @@ public class ColetaPrivadaService {
     @Transactional(readOnly=true) public List<PontoColetaPrivadaDTO> planejar(Long id,String s,String uid,boolean otimizar){
         turma(id,uid,true,false);sentido(s);
         var ativa=viagens.findFirstByTurmaIdAndStatus(id,"EM_ANDAMENTO").orElse(null);
-        if(ativa!=null){if(!s.equals(ativa.getSentido()))throw conflito("A viagem ativa utiliza outro sentido.");return operacoes.getObject().roteiroViagem(ativa.getId(),uid);}
+        if(ativa!=null){
+            if(!"PRIVADA".equals(ativa.getModalidade()))throw conflito("A viagem ativa não é privada.");
+            if(!s.equals(ativa.getSentido()))throw conflito("A viagem ativa utiliza outro sentido.");
+            return operacoes.getObject().roteiroViagem(ativa.getId(),uid);
+        }
         return roteiroSistema(id,s,otimizar);
     }
     @Transactional(readOnly=true) public List<PontoColetaPrivadaDTO> roteiroSistema(Long id,String s,boolean otimizar){
@@ -127,5 +130,5 @@ public class ColetaPrivadaService {
         if(!otimizar||pontos.size()<3)return pontos;var entrada=new ArrayList<PontoPublicoDTO>();for(int n=0;n<pontos.size();n++){var p=pontos.get(n);entrada.add(new PontoPublicoDTO((long)n,p.nome(),p.latitude(),p.longitude()));}
         return OtimizadorParadas.ordenar(entrada).stream().map(p->pontos.get(Math.toIntExact(p.paradaId()))).toList();
     }
-    @Transactional(readOnly=true) public void validarInicio(Long id,String s){sentido(s);if(publicas.findByTurmaId(id).isEmpty())roteiroSistema(id,s,false);}
+    @Transactional(readOnly=true) public void validarInicio(Long id,String s){sentido(s);roteiroSistema(id,s,false);}
 }

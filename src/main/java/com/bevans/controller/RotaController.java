@@ -362,7 +362,9 @@ public class RotaController {
 
         String sentido = sentidoObj.toString();
 
-        viagemService.iniciarRota(turmaId, sentido);
+        if(!"PRIVADA".equals(payload.get("modalidade")))
+            throw new IllegalArgumentException("Esta operação é privada. Informe modalidade PRIVADA; para rotas públicas use /rotas-publicas/{id}/iniciar.");
+        viagemService.iniciarRota(turmaId, sentido,"PRIVADA",null);
 
 
         return ResponseEntity.ok(

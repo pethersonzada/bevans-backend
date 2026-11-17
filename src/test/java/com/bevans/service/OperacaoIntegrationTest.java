@@ -52,6 +52,10 @@ class OperacaoIntegrationTest {
         var p=new Presenca();p.setTurma(t);p.setUsuario(a);p.setData(LocalDate.now(clock));p.setStatus("AMBOS");p.setEnderecoIda(e);p.setEnderecoVolta(f);presencas.save(p);return new Cenario(t,d,a);
     }
     private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);var v=viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow();assertEquals(clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),v.getIniciadaEm());return v.getId();}
+    private Long iniciarPublica(Cenario c,String sentido,Long rotaId){
+        viagens.iniciarRota(c.turma().getId(),sentido,"PUBLICA",rotaId);
+        return viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow().getId();
+    }
     private OperacaoDTO.Alteracao estado(EstadoOperacional e,long versao){return new OperacaoDTO.Alteracao(e,false,versao,null);}
     private void distribuir(){for(int i=0;i<1000;i++){Long id=reservas.reservar();if(id==null)break;notificacoes.distribuir(id);} }
 
@@ -93,17 +97,32 @@ class OperacaoIntegrationTest {
         assertEquals(-8.16,service.roteiroViagem(segunda,uid).get(1).latitude());assertEquals(-8.1,service.roteiroViagem(primeira,uid).get(1).latitude());
     }
 
+    @Test void rascunhoPublicoNaoInterfereNoRoteiroPrivado(){
+        var c=cenario();var r=publicas.criar(c.dono().getId(),
+            new RotaPublicaRequest(c.turma().getId(),"Rascunho","Recife",CategoriaRota.OUTROS,
+                ModoRota.FIXA,"Origem pública",-8.04,-35.04,"Destino público",-8.4,-35.4,
+                null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),null));
+        assertFalse(r.publicada());
+        var id=iniciar(c,"IDA");
+        var v=viagemRepo.findById(id).orElseThrow();
+        assertEquals("PRIVADA",v.getModalidade());assertNull(v.getRotaPublicaId());
+        var pts=service.roteiroViagem(id,c.dono().getFirebaseUid());
+        assertEquals("Garagem",pts.getFirst().nome());
+        assertEquals("Campus",pts.getLast().nome());
+        assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().esperados());
+    }
+
     @Test void publicasPreservamExtremosPropriosEParadasSemReservasNosDoisSentidos(){
         for(var modo:ModoRota.values()){
             var c=cenario();String uid=c.dono().getFirebaseUid();
             var r=publicas.criar(c.dono().getId(),new RotaPublicaRequest(c.turma().getId(),"Pública","Recife",CategoriaRota.OUTROS,modo,"Origem pública",-8.04,-35.04,"Destino público",-8.4,-35.4,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),LocalTime.of(23,0)));
             publicas.salvarParadas(r.id(),c.dono().getId(),List.of(new ParadaPublicaDTO(null,"Segunda geográfica",-8.3,-35.3,null),new ParadaPublicaDTO(null,"Primeira geográfica",-8.1,-35.1,null)));
             publicas.publicar(r.id(),c.dono().getId(),true);
-            Long ida=iniciar(c,"IDA");var pontos=service.roteiroViagem(ida,uid);
+            Long ida=iniciarPublica(c,"IDA",r.id());var pontos=service.roteiroViagem(ida,uid);
             assertEquals(4,pontos.size());assertEquals(-8.04,pontos.getFirst().latitude());assertEquals(-8.4,pontos.getLast().latitude());
             assertEquals(0,service.painel(TipoOperacao.VIAGEM,ida,uid).contadores().esperados());
             if(modo==ModoRota.FIXA)assertEquals("Segunda geográfica",pontos.get(1).nome());
-            viagens.encerrarRota(c.turma().getId());Long volta=iniciar(c,"VOLTA");var retorno=service.roteiroViagem(volta,uid);
+            viagens.encerrarRota(c.turma().getId());Long volta=iniciarPublica(c,"VOLTA",r.id());var retorno=service.roteiroViagem(volta,uid);
             assertEquals(4,retorno.size());assertEquals(-8.4,retorno.getFirst().latitude());assertEquals(-8.04,retorno.getLast().latitude());
             if(modo==ModoRota.FIXA)assertEquals("Primeira geográfica",retorno.get(1).nome());
         }
@@ -115,7 +134,7 @@ class OperacaoIntegrationTest {
         var pedido=embarques.solicitar(r.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",null,"Pin aprovado",-8.12,-35.12,true,null));
         embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
         var outro=usuario("PASSAGEIRO");embarques.solicitar(r.id(),outro.getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",null,"Pin pendente",-8.13,-35.13,true,null));
-        Long id=iniciar(c,"IDA");var pontos=service.roteiroViagem(id,c.dono().getFirebaseUid());
+        Long id=iniciarPublica(c,"IDA",r.id());var pontos=service.roteiroViagem(id,c.dono().getFirebaseUid());
         assertEquals(3,pontos.size());assertEquals("EXCEPCIONAL",pontos.get(1).tipo());assertEquals(-8.12,pontos.get(1).latitude());
         assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().esperados());
         assertEquals(-8.12,service.rotaAtiva(c.turma().getId(),"IDA").getFirst().getLatitude());
@@ -127,7 +146,7 @@ class OperacaoIntegrationTest {
         var pedido=embarques.solicitar(r.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",parada.id(),null,null,null,null,null));embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
         // Simula dado legado inconsistente; a API de cadastro já impede esta alteração.
         var persistida=paradasPublicas.findById(parada.id()).orElseThrow();persistida.setAtiva(false);paradasPublicas.saveAndFlush(persistida);
-        var erro=assertThrows(ResponseStatusException.class,()->iniciar(c,"IDA"));assertTrue(erro.getReason().contains("Parada aprovada não está ativa"));assertFalse(viagens.rotaAtiva(c.turma().getId()));
+        var erro=assertThrows(ResponseStatusException.class,()->iniciarPublica(c,"IDA",r.id()));assertTrue(erro.getReason().contains("Parada aprovada não está ativa"));assertFalse(viagens.rotaAtiva(c.turma().getId()));
     }
 
     @Test void privadaComParadasMantemPontoSemPassageirosNoSnapshot(){
@@ -331,7 +350,7 @@ class OperacaoIntegrationTest {
             var p=publicas.salvarParadas(r.id(),c.dono().getId(),List.of(new ParadaPublicaDTO(null,"Praça",-8.1,-35.1,null))).paradas().get(0);
             var pedido=embarques.solicitar(r.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",p.id(),null,null,null,null,null));embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
             var pendente=usuario("PASSAGEIRO");embarques.solicitar(r.id(),pendente.getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",p.id(),null,null,null,null,null));
-            Long id=iniciar(c,"IDA");var painel=service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid());assertEquals(1,painel.contadores().esperados());assertEquals(p.id(),painel.registros().get(0).paradaId());
+            Long id=iniciarPublica(c,"IDA",r.id());var painel=service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid());assertEquals(1,painel.contadores().esperados());assertEquals(p.id(),painel.registros().get(0).paradaId());
             assertThrows(AccessDeniedException.class,()->service.minha(id,pendente.getFirebaseUid()));
             gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("publica",-8.1,-35.1,clock.instant(),5.0,null));distribuir();
             assertTrue(notificacoes.listar(c.aluno().getFirebaseUid(),0,20).stream().anyMatch(n->n.tipo().equals("VAN_CHEGOU")));

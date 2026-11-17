@@ -16,11 +16,22 @@ public class RotaPublicaController {
     private final RotaPublicaService service;
     private final AccessPolicy access;
     private final com.bevans.service.FavoritoService favoritos;
-    public RotaPublicaController(RotaPublicaService service,AccessPolicy access,com.bevans.service.FavoritoService favoritos){this.service=service;this.access=access;this.favoritos=favoritos;}
+    private final com.bevans.service.ViagemService viagens;
+    public RotaPublicaController(RotaPublicaService service,AccessPolicy access,com.bevans.service.FavoritoService favoritos,
+            com.bevans.service.ViagemService viagens){this.service=service;this.access=access;this.favoritos=favoritos;this.viagens=viagens;}
 
     @PostMapping @PreAuthorize("@access.isMotorista()")
     @Operation(summary="Criar configuração privada de rota urbana",description="Não publica automaticamente; turmaId deve pertencer ao motorista autenticado.")
     public RotaPublicaDTO criar(@RequestBody RotaPublicaRequest dados){return service.criar(access.usuario().getId(),dados);}
+
+    public record InicioPublico(String sentido){}
+    @PostMapping("/{id}/iniciar") @PreAuthorize("@rotasPublicasAccess.own(#p0)")
+    public java.util.Map<String,String> iniciar(@PathVariable Long id,@RequestBody InicioPublico pedido){
+        if(pedido==null||pedido.sentido()==null)throw new IllegalArgumentException("Informe IDA ou VOLTA.");
+        var rota=service.consultar(id);
+        viagens.iniciarRota(rota.turmaId(),pedido.sentido(),"PUBLICA",id);
+        return java.util.Map.of("mensagem","Rota pública iniciada com sucesso.");
+    }
 
     @GetMapping("/minhas") @PreAuthorize("@access.isMotorista()")
     public List<RotaPublicaDTO> minhas(){return service.minhas(access.usuario().getId());}

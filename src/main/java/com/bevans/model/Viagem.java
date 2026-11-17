@@ -28,6 +28,15 @@ public class Viagem {
     @Column(name = "data_criacao", updatable = false)
     private LocalDateTime dataCriacao;
     private java.time.Instant iniciadaEm;
+    // Nulo apenas nas viagens legadas anteriores à separação explícita.
+    @Column(length=10) private String modalidade;
+    @Column(name="rota_publica_id") private Long rotaPublicaId;
+    public String getModalidade(){return modalidade;}
+    public Long getRotaPublicaId(){return rotaPublicaId;}
+    public void definirModalidade(String modalidade,Long rotaPublicaId){
+        if(id!=null)throw new IllegalStateException("Modalidade de viagem iniciada é imutável.");
+        this.modalidade=modalidade;this.rotaPublicaId=rotaPublicaId;
+    }
     public java.time.Instant getIniciadaEm(){return iniciadaEm;}
     public void registrarInicio(java.time.Instant instante,java.time.ZoneId zona){
         if(id!=null)throw new IllegalStateException("Início de viagem persistida não pode ser reescrito");

@@ -180,7 +180,6 @@ public class RotaService {
     public List<PassageiroRotaDTO> planejarPrivada(String sentido,Long turmaId) {
         if(!"IDA".equalsIgnoreCase(sentido)&&!"VOLTA".equalsIgnoreCase(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
         boolean isVolta="VOLTA".equalsIgnoreCase(sentido);
-        if(publicas!=null&&publicas.findByTurmaId(turmaId).isPresent())throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"Rota pública utiliza planejamento de embarques, não presenças privadas.");
         var coleta=coletas==null?null:coletas.getIfAvailable();
         if(coleta!=null&&coleta.usaParadas(turmaId,isVolta?"VOLTA":"IDA"))return
                 coleta.roteiroSistema(turmaId,isVolta?"VOLTA":"IDA",false).stream().flatMap(p->p.passageiros().stream()).toList();

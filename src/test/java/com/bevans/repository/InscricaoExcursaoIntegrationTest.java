@@ -137,14 +137,14 @@ class InscricaoExcursaoIntegrationTest {
         assertEquals(e.paradas(),excursoes.consultar(c.id(),c.uid()).paradas());
         excursoes.cancelar(c.id(),c.uid());assertThrows(ResponseStatusException.class,()->roteiros.planejamento(c.id(),c.uid(),"IDA",false));
     }
-    @Test void naoInventaOrigemNemRetornoERecusaPlanejarDepoisDaPartida(){
+    @Test void naoInventaOrigemNemRetornoEMantemPreviaDepoisDaPartida(){
         String uid=motorista();var e=excursoes.criar(uid,new ExcursaoRequest("Evento","Destino",-8.3,-35.3,null,null,null,clock.instant().plusSeconds(3600),null,12,null));
         e=excursoes.publicar(e.id(),uid,e.versao());Long id=e.id();
         assertEquals(List.of("DESTINO"),roteiros.planejamento(id,uid,"IDA",false).stream().map(PontoRoteiroExcursaoDTO::tipo).toList());
         assertThrows(IllegalArgumentException.class,()->roteiros.planejamento(id,uid,"IDA",true));
         assertThrows(IllegalArgumentException.class,()->roteiros.planejamento(id,uid,"VOLTA",false));
         ((ConviteExcursaoIntegrationTest.Relogio)clock).agora=clock.instant().plusSeconds(3601);
-        assertThrows(ResponseStatusException.class,()->roteiros.planejamento(id,uid,"IDA",false));
+        assertEquals(List.of("DESTINO"),roteiros.planejamento(id,uid,"IDA",false).stream().map(PontoRoteiroExcursaoDTO::tipo).toList());
     }
     @Test void iniciarCongelaRoteiroInscricoesEEdicoesEFinalizarConcluiExcursao(){
         var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);String token=chave(c);var i=service.solicitar(c.convite().token(),token,porta("Ana"));service.confirmar(c.id(),i.id(),c.uid());
@@ -155,9 +155,10 @@ class InscricaoExcursaoIntegrationTest {
         assertThrows(ResponseStatusException.class,()->service.cancelar(token));
         assertThrows(ResponseStatusException.class,()->service.emitirCredencial(c.convite().token()));
         var e=excursoes.consultar(c.id(),c.uid());assertThrows(ResponseStatusException.class,()->excursoes.atualizar(c.id(),c.uid(),dados(e,20,e.partidaEm())));
-        assertThrows(ResponseStatusException.class,()->roteiros.planejamento(c.id(),c.uid(),"IDA",true));
+        assertEquals(x.pontos(),roteiros.planejamento(c.id(),c.uid(),"IDA",true));
         assertEquals(EstadoExecucaoExcursao.FINALIZADA,execucoes.finalizar(c.id(),x.id(),c.uid()).estado());
         assertEquals(EstadoExcursao.CONCLUIDA,excursoes.consultar(c.id(),c.uid()).estado());
+        assertEquals(x.pontos(),roteiros.planejamento(c.id(),c.uid(),"IDA",false));
         assertEquals(x.id(),execucoes.finalizar(c.id(),x.id(),c.uid()).id());
         assertThrows(ResponseStatusException.class,()->execucoes.iniciar(c.id(),c.uid(),"IDA",false));
         assertThrows(AccessDeniedException.class,()->execucoes.listar(c.id(),motorista()));
@@ -192,7 +193,29 @@ class InscricaoExcursaoIntegrationTest {
     }
     @Test void inicioComAtrasoNaoDependeDaPreviaAntesDoHorario(){
         var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);((ConviteExcursaoIntegrationTest.Relogio)clock).agora=clock.instant().plusSeconds(86500);
-        assertThrows(ResponseStatusException.class,()->roteiros.planejamento(c.id(),c.uid(),"IDA",false));
+        assertEquals("ORIGEM",roteiros.planejamento(c.id(),c.uid(),"IDA",false).get(0).tipo());
         assertEquals(EstadoExecucaoExcursao.EM_ANDAMENTO,execucoes.iniciar(c.id(),c.uid(),"IDA",false).estado());
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(longs={-1,0,1,86400})
+    void previaEInicioAntesNoHorarioEAposPartidaPreservamConfirmados(long atraso){
+        var c=cenario(12,ModoColetaExcursao.PORTA_A_PORTA);
+        var i=service.solicitar(c.convite().token(),chave(c),porta("Confirmada"));service.confirmar(c.id(),i.id(),c.uid());
+        var prevista=excursoes.consultar(c.id(),c.uid()).partidaEm();
+        ((ConviteExcursaoIntegrationTest.Relogio)clock).agora=prevista.plusSeconds(atraso);
+        var previa=roteiros.planejamento(c.id(),c.uid(),"IDA",true);
+        assertEquals(List.of(i.id()),previa.stream().flatMap(p->p.participantes().stream()).map(PontoRoteiroExcursaoDTO.Participante::inscricaoId).toList());
+        var x=execucoes.iniciar(c.id(),c.uid(),"IDA",true);assertEquals(previa,x.pontos());
+        assertEquals(previa,roteiros.planejamento(c.id(),c.uid(),"IDA",false));
+        execucoes.finalizar(c.id(),x.id(),c.uid());assertEquals(previa,roteiros.planejamento(c.id(),c.uid(),"IDA",true));
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(ModoColetaExcursao.class)
+    void semInscritosPreservaParadasConfiguradasNoRoteiroSalvo(ModoColetaExcursao modo){
+        var c=cenario(12,modo);var antes=excursoes.consultar(c.id(),c.uid());
+        var pontos=roteiros.planejamento(c.id(),c.uid(),"IDA",false);
+        assertEquals(antes.paradas().size()+2,pontos.size());assertTrue(pontos.stream().allMatch(p->p.participantes().isEmpty()));
+        var x=execucoes.iniciar(c.id(),c.uid(),"IDA",false);assertEquals(pontos,x.pontos());
+        assertEquals(antes.paradas(),excursoes.consultar(c.id(),c.uid()).paradas());
     }
 }

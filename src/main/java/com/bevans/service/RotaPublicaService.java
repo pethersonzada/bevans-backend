@@ -87,7 +87,7 @@ public class RotaPublicaService {
         RotaPublica r=lockRota(id,motoristaId);
         var antes=dto(r);
         if(dados==null || !Objects.equals(dados.turmaId(),r.getTurma().getId())) throw new IllegalArgumentException("Não é permitido trocar a turma da rota.");
-        if(!embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo"))).isEmpty()
+        if(!embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Recife"))).isEmpty()
                 && (dados.modo()!=r.getModo()||!Objects.equals(dados.dias(),r.getDias())||!Objects.equals(dados.horarioIda(),r.getHorarioIda())||!Objects.equals(dados.horarioVolta(),r.getHorarioVolta())))
             throw new SolicitacaoConflictException("Há embarques aprovados: preserve modalidade, dias e horários.");
         aplicar(r,dados);var depois=dto(rotas.saveAndFlush(r));avisarMudancas(r,antes,depois);return depois;
@@ -121,7 +121,7 @@ public class RotaPublicaService {
             if(p==null)throw new IllegalArgumentException("Parada inválida.");texto(p.nome(),"nome da parada",120);coordenadas(p.latitude(),p.longitude());
             if(p.id()!=null && (!porId.containsKey(p.id()) || !ids.add(p.id()))) throw new IllegalArgumentException("Parada duplicada ou pertencente a outra rota.");
         }
-        var confirmados=embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Sao_Paulo")));
+        var confirmados=embarques.findByRotaIdAndStatusAndDataOperacaoGreaterThanEqual(id,StatusEmbarque.APROVADO,java.time.LocalDate.now(java.time.ZoneId.of("America/Recife")));
         for(SolicitacaoEmbarque e:confirmados) {
             if(e.getParada()==null)continue;
             ParadaPublica atual=porId.get(e.getParada().getId());

@@ -10,6 +10,7 @@ import com.bevans.model.Viagem;
 public interface ViagemRepository extends JpaRepository<Viagem, Long> {
     
     Optional<Viagem> findFirstByTurmaIdAndStatus(Long turmaId, String status);
+    Optional<Viagem> findFirstByTurmaIdOrderByIdDesc(Long turmaId);
     
     boolean existsByTurmaIdAndStatus(Long turmaId, String status);
     boolean existsByTurmaMotoristaIdAndStatus(Long motoristaId, String status);

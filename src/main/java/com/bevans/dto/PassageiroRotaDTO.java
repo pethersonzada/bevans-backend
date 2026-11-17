@@ -6,7 +6,11 @@ public class PassageiroRotaDTO {
     private Double latitude;
     private Double longitude;
 
-    public PassageiroRotaDTO(Long id, String nome, Double latitude, Double longitude) {
+    @com.fasterxml.jackson.annotation.JsonCreator
+    public PassageiroRotaDTO(@com.fasterxml.jackson.annotation.JsonProperty("id") Long id,
+            @com.fasterxml.jackson.annotation.JsonProperty("nome") String nome,
+            @com.fasterxml.jackson.annotation.JsonProperty("latitude") Double latitude,
+            @com.fasterxml.jackson.annotation.JsonProperty("longitude") Double longitude) {
         this.id = id;
         this.nome = nome;
         this.latitude = latitude;

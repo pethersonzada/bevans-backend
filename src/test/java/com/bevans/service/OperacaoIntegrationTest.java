@@ -30,6 +30,7 @@ class OperacaoIntegrationTest {
     @Autowired ExcursaoService excursoes;@Autowired ConviteExcursaoService convites;@Autowired InscricaoExcursaoService inscricoes;
     @Autowired ExecucaoExcursaoService execucoes;@Autowired RotaPublicaService publicas;@Autowired EmbarqueService embarques;
     @Autowired ColetaPrivadaService coletas;@Autowired OperacaoViagemRepository operacoes;@Autowired RegistroOperacionalRepository registros;
+    @Autowired ParadaPublicaRepository paradasPublicas;
     @Autowired NotificacaoService notificacoes;@Autowired NotificacaoRepository notificacaoRepo;
     @Autowired OutboxNotificacaoRepository outbox;@Autowired DispositivoNotificacaoService dispositivos;
     @Autowired DispositivoNotificacaoRepository dispositivoRepo;@Autowired EntregaPushService pushes;
@@ -53,6 +54,88 @@ class OperacaoIntegrationTest {
     private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);var v=viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow();assertEquals(clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),v.getIniciadaEm());return v.getId();}
     private OperacaoDTO.Alteracao estado(EstadoOperacional e,long versao){return new OperacaoDTO.Alteracao(e,false,versao,null);}
     private void distribuir(){for(int i=0;i<1000;i++){Long id=reservas.reservar();if(id==null)break;notificacoes.distribuir(id);} }
+
+    @Test void statusDistingueNaoIniciadaGpsAusenteRecenteExpiradoEEncerramento(){
+        var c=cenario();String uid=c.aluno().getFirebaseUid();Long turma=c.turma().getId();
+        assertEquals("NAO_INICIADA",viagens.verificarStatusAtual(turma).get("estado"));
+        Long id=iniciar(c,"IDA");assertEquals("EM_ANDAMENTO",viagens.verificarStatusAtual(turma).get("estado"));
+        assertEquals("SEM_LOCALIZACAO",gpsViagem.consultar(id,uid).estado());
+        gpsViagem.enviar(id,c.dono().getFirebaseUid(),new PosicaoRequest("estado",-8.1,-35.1,clock.instant(),5.0,null));
+        assertEquals("ATUALIZADA",gpsViagem.consultar(id,uid).estado());
+        ((Relogio)clock).agora=clock.instant().plusSeconds(30);
+        assertEquals("DESATUALIZADA",gpsViagem.consultar(id,uid).estado());assertNull(gpsViagem.consultar(id,uid).latitude());
+        assertEquals("ATIVA",viagens.verificarStatusAtual(turma).get("status"));
+        viagens.encerrarRota(turma);assertEquals("FINALIZADA",viagens.verificarStatusAtual(turma).get("estado"));
+        assertEquals(id,viagens.verificarStatusAtual(turma).get("ultimaViagemId"));assertEquals("FINALIZADA",gpsViagem.consultar(id,uid).estado());
+        Long segunda=iniciar(c,"VOLTA");assertNotEquals(id,segunda);assertEquals("SEM_LOCALIZACAO",gpsViagem.consultar(segunda,uid).estado());
+    }
+
+    @Test void enderecoAusenteImpedeInicioSemViagemOuSnapshotParcial(){
+        var c=cenario();var p=presencas.findByUsuarioIdAndTurmaIdAndData(c.aluno().getId(),c.turma().getId(),LocalDate.now(clock)).orElseThrow();
+        p.setEnderecoIda(null);presencas.saveAndFlush(p);long antes=operacoes.count();
+        var erro=assertThrows(com.bevans.exception.ConflitoOperacionalException.class,()->iniciar(c,"IDA"));
+        assertEquals("PONTO_INVALIDO",erro.getCodigo());assertFalse(viagens.rotaAtiva(c.turma().getId()));assertEquals(antes,operacoes.count());
+        Long volta=iniciar(c,"VOLTA");assertEquals(-8.2,service.rotaAtiva(c.turma().getId(),"VOLTA").getFirst().getLatitude());
+        assertEquals(1,service.painel(TipoOperacao.VIAGEM,volta,c.dono().getFirebaseUid()).contadores().esperados());
+    }
+
+    @Test void roteiroPrivadoCompletoPermaneceImutavelEAOutraExecucaoUsaNovoEndereco(){
+        var c=cenario();Long primeira=iniciar(c,"IDA");String uid=c.dono().getFirebaseUid();
+        var roteiro=service.roteiroViagem(primeira,uid);assertEquals(List.of("ORIGEM","INDIVIDUAL","DESTINO"),roteiro.stream().map(PontoColetaPrivadaDTO::tipo).toList());
+        var p=presencas.findByUsuarioIdAndTurmaIdAndData(c.aluno().getId(),c.turma().getId(),LocalDate.now(clock)).orElseThrow();
+        var endereco=p.getEnderecoIda();endereco.setLatitude(-8.16);enderecos.saveAndFlush(endereco);
+        assertEquals(-8.1,service.roteiroViagem(primeira,uid).get(1).latitude());
+        assertEquals(-8.1,coletas.planejar(c.turma().getId(),"IDA",uid,true).get(1).latitude());
+        assertEquals(-8.1,service.rotaAtiva(c.turma().getId(),"IDA").getFirst().getLatitude());
+        assertThrows(ResponseStatusException.class,()->service.rotaAtiva(c.turma().getId(),"VOLTA"));
+        assertThrows(AccessDeniedException.class,()->service.roteiroViagem(primeira,c.aluno().getFirebaseUid()));
+        viagens.encerrarRota(c.turma().getId());Long segunda=iniciar(c,"IDA");assertNotEquals(primeira,segunda);
+        assertEquals(-8.16,service.roteiroViagem(segunda,uid).get(1).latitude());assertEquals(-8.1,service.roteiroViagem(primeira,uid).get(1).latitude());
+    }
+
+    @Test void publicasPreservamExtremosPropriosEParadasSemReservasNosDoisSentidos(){
+        for(var modo:ModoRota.values()){
+            var c=cenario();String uid=c.dono().getFirebaseUid();
+            var r=publicas.criar(c.dono().getId(),new RotaPublicaRequest(c.turma().getId(),"Pública","Recife",CategoriaRota.OUTROS,modo,"Origem pública",-8.04,-35.04,"Destino público",-8.4,-35.4,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),LocalTime.of(23,0)));
+            publicas.salvarParadas(r.id(),c.dono().getId(),List.of(new ParadaPublicaDTO(null,"Segunda geográfica",-8.3,-35.3,null),new ParadaPublicaDTO(null,"Primeira geográfica",-8.1,-35.1,null)));
+            publicas.publicar(r.id(),c.dono().getId(),true);
+            Long ida=iniciar(c,"IDA");var pontos=service.roteiroViagem(ida,uid);
+            assertEquals(4,pontos.size());assertEquals(-8.04,pontos.getFirst().latitude());assertEquals(-8.4,pontos.getLast().latitude());
+            assertEquals(0,service.painel(TipoOperacao.VIAGEM,ida,uid).contadores().esperados());
+            if(modo==ModoRota.FIXA)assertEquals("Segunda geográfica",pontos.get(1).nome());
+            viagens.encerrarRota(c.turma().getId());Long volta=iniciar(c,"VOLTA");var retorno=service.roteiroViagem(volta,uid);
+            assertEquals(4,retorno.size());assertEquals(-8.4,retorno.getFirst().latitude());assertEquals(-8.04,retorno.getLast().latitude());
+            if(modo==ModoRota.FIXA)assertEquals("Primeira geográfica",retorno.get(1).nome());
+        }
+    }
+
+    @Test void publicaFlexivelIncluiExcepcionalAprovadoSemMisturarPresencaPrivada(){
+        var c=cenario();var r=publicas.criar(c.dono().getId(),new RotaPublicaRequest(c.turma().getId(),"Flexível","Recife",CategoriaRota.OUTROS,ModoRota.FLEXIVEL,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),null));
+        publicas.publicar(r.id(),c.dono().getId(),true);
+        var pedido=embarques.solicitar(r.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",null,"Pin aprovado",-8.12,-35.12,true,null));
+        embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
+        var outro=usuario("PASSAGEIRO");embarques.solicitar(r.id(),outro.getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",null,"Pin pendente",-8.13,-35.13,true,null));
+        Long id=iniciar(c,"IDA");var pontos=service.roteiroViagem(id,c.dono().getFirebaseUid());
+        assertEquals(3,pontos.size());assertEquals("EXCEPCIONAL",pontos.get(1).tipo());assertEquals(-8.12,pontos.get(1).latitude());
+        assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().esperados());
+        assertEquals(-8.12,service.rotaAtiva(c.turma().getId(),"IDA").getFirst().getLatitude());
+    }
+
+    @Test void paradaPublicaAprovadaDesativadaBloqueiaInicioComCausaEspecifica(){
+        var c=cenario();var r=publicas.criar(c.dono().getId(),new RotaPublicaRequest(c.turma().getId(),"Fixa","Recife",CategoriaRota.OUTROS,ModoRota.FIXA,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),null));
+        var parada=publicas.salvarParadas(r.id(),c.dono().getId(),List.of(new ParadaPublicaDTO(null,"Praça",-8.1,-35.1,null))).paradas().getFirst();publicas.publicar(r.id(),c.dono().getId(),true);
+        var pedido=embarques.solicitar(r.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"IDA",parada.id(),null,null,null,null,null));embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
+        // Simula dado legado inconsistente; a API de cadastro já impede esta alteração.
+        var persistida=paradasPublicas.findById(parada.id()).orElseThrow();persistida.setAtiva(false);paradasPublicas.saveAndFlush(persistida);
+        var erro=assertThrows(ResponseStatusException.class,()->iniciar(c,"IDA"));assertTrue(erro.getReason().contains("Parada aprovada não está ativa"));assertFalse(viagens.rotaAtiva(c.turma().getId()));
+    }
+
+    @Test void privadaComParadasMantemPontoSemPassageirosNoSnapshot(){
+        var c=cenario();var p=presencas.findByUsuarioIdAndTurmaIdAndData(c.aluno().getId(),c.turma().getId(),LocalDate.now(clock)).orElseThrow();p.setStatus("NAO_VOU");presencas.saveAndFlush(p);
+        var cfg=coletas.configurar(c.turma().getId(),"IDA",c.dono().getFirebaseUid(),new ColetaPrivadaRequest(ModoColetaPrivada.PARADAS_DEFINIDAS,0L,List.of(new ColetaPrivadaRequest.Parada(null,"Ocupada",-8.1,-35.1,null,true),new ColetaPrivadaRequest.Parada(null,"Sem passageiros",-8.2,-35.2,null,true))));
+        coletas.escolher(c.turma().getId(),"IDA",c.aluno().getFirebaseUid(),null,cfg.paradas().getFirst().id(),cfg.versao());p.setStatus("IDA");presencas.saveAndFlush(p);
+        Long id=iniciar(c,"IDA");var roteiro=service.roteiroViagem(id,c.dono().getFirebaseUid());assertEquals(4,roteiro.size());assertEquals("Sem passageiros",roteiro.get(2).nome());assertTrue(roteiro.get(2).passageiros().isEmpty());assertEquals(1,service.rotaAtiva(c.turma().getId(),"IDA").size());
+    }
 
     @Test
     void privadaComPassageiroAprovadoSemPresencaNaoInicia() {

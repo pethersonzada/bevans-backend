@@ -28,10 +28,12 @@ public class ExecucaoExcursaoService {
         var e=lock(id,uid);
         if(!"IDA".equals(sentido)&&!"VOLTA".equals(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
         var existente=execucoes.findByExcursaoIdAndSentido(id,sentido).orElse(null);
-        if(existente!=null){em.refresh(existente);if(existente.getEstado()==EstadoExecucaoExcursao.EM_ANDAMENTO)return dto(existente);throw conflito("Este sentido já foi executado ou cancelado.");}
-        if(e.getEstado()!=EstadoExcursao.PUBLICADA)throw conflito("Excursão não está disponível para iniciar.");
-        if(execucoes.findByExcursaoIdOrderByIdAsc(id).stream().anyMatch(x->x.getEstado()==EstadoExecucaoExcursao.EM_ANDAMENTO))throw conflito("Outra execução está em andamento.");
-        if("VOLTA".equals(sentido)&&execucoes.findByExcursaoIdAndSentido(id,"IDA").filter(x->x.getEstado()==EstadoExecucaoExcursao.FINALIZADA).isEmpty())throw conflito("Finalize a ida antes de iniciar a volta.");
+        if(existente!=null){em.refresh(existente);if(existente.getEstado()==EstadoExecucaoExcursao.EM_ANDAMENTO)return dto(existente);throw new com.bevans.exception.ConflitoOperacionalException("EXECUCAO_EXISTENTE","Este sentido já foi executado ou cancelado.");}
+        if(e.getEstado()!=EstadoExcursao.PUBLICADA)throw new com.bevans.exception.ConflitoOperacionalException("ESTADO_INVALIDO","Excursão não está disponível para iniciar.");
+        if(execucoes.findByExcursaoIdOrderByIdAsc(id).stream().anyMatch(x->x.getEstado()==EstadoExecucaoExcursao.EM_ANDAMENTO))throw new com.bevans.exception.ConflitoOperacionalException("EXECUCAO_ATIVA","Outra execução está em andamento.");
+        if("VOLTA".equals(sentido)&&execucoes.findByExcursaoIdAndSentido(id,"IDA").filter(x->x.getEstado()==EstadoExecucaoExcursao.FINALIZADA).isEmpty())throw new com.bevans.exception.ConflitoOperacionalException("IDA_NAO_FINALIZADA","Finalize a ida antes de iniciar a volta.");
+        // Horários são previstos, sem prazo máximo de atraso. A partida tardia é
+        // permitida enquanto PUBLICADA, respeitando unicidade e IDA antes da VOLTA.
         var pontos=roteiros.paraInicio(id,uid,sentido,otimizar);String snapshot;
         try{snapshot=json.writeValueAsString(pontos);}catch(Exception ex){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Não foi possível registrar o roteiro.");}
         var x=new ExecucaoExcursao();x.criar(e,sentido,snapshot,clock.instant());execucoes.saveAndFlush(x);

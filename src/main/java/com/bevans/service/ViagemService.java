@@ -17,7 +17,7 @@ import com.bevans.repository.ViagemRepository;
 @Service
 public class ViagemService {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
-    private java.time.Clock clock=java.time.Clock.systemUTC();
+    private java.time.Clock clock=java.time.Clock.system(java.time.ZoneId.of("America/Recife"));
 
     private final ViagemRepository viagemRepository;
     private final TurmaRepository turmaRepository;
@@ -45,6 +45,7 @@ public class ViagemService {
 
     @Transactional
     public void iniciarRota(Long turmaId, String sentido) {
+        if(!"IDA".equals(sentido)&&!"VOLTA".equals(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
         Turma turma = turmaRepository.lockById(turmaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada no sistema."));
 
@@ -120,12 +121,16 @@ public class ViagemService {
         if (viagemAtiva.isPresent()) {
             Viagem v = viagemAtiva.get();
             resposta.put("status", "ATIVA");
+            resposta.put("estado", "EM_ANDAMENTO");
             resposta.put("viagemId",v.getId());
             resposta.put("sentido", v.getSentido());
             resposta.put("turmaId", v.getTurma().getId());
             resposta.put("turmaNome", v.getTurma().getNome());
         } else {
             resposta.put("status", "INATIVA");
+            var ultima=viagemRepository.findFirstByTurmaIdOrderByIdDesc(turmaId).orElse(null);
+            resposta.put("estado",ultima==null?"NAO_INICIADA":ultima.getStatus());
+            if(ultima!=null)resposta.put("ultimaViagemId",ultima.getId());
         }
         return resposta;
     }

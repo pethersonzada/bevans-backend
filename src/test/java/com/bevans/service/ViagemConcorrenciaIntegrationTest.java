@@ -44,6 +44,8 @@ class ViagemConcorrenciaIntegrationTest {
         Turma turma = new Turma();
         turma.setNome("Turma concorrencia");
         turma.setMotorista(motorista);
+        turma.setOrigemLatitude(-8.0);turma.setOrigemLongitude(-35.0);
+        turma.setDestinoLatitude(-8.3);turma.setDestinoLongitude(-35.3);
         turma = turmas.saveAndFlush(turma);
 
         final Long turmaId = turma.getId();

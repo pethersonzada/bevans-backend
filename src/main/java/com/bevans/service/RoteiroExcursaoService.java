@@ -3,6 +3,8 @@ import com.bevans.dto.*;
 import com.bevans.model.*;
 import com.bevans.repository.InscricaoExcursaoRepository;
 import com.bevans.repository.ExecucaoExcursaoRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.util.*;
 import org.springframework.http.HttpStatus;
@@ -14,13 +16,26 @@ public class RoteiroExcursaoService {
     private final ExcursaoService excursoes;private final InscricaoExcursaoRepository inscricoes;private final Clock clock;
     private final ExecucaoExcursaoRepository execucoes;
     public RoteiroExcursaoService(ExcursaoService e,InscricaoExcursaoRepository i,Clock c,ExecucaoExcursaoRepository x){excursoes=e;inscricoes=i;clock=c;execucoes=x;}
-    private ResponseStatusException conflito(){return new ResponseStatusException(HttpStatus.CONFLICT,"Planejamento indisponível ou inconsistente; revise a excursão.");}
+    private ResponseStatusException conflito(String causa){return new com.bevans.exception.ConflitoOperacionalException("ROTEIRO_INCONSISTENTE",causa);}
+    private void coordenadas(Double lat,Double lon){if(lat==null||lon==null||!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180||(lat==0&&lon==0))throw conflito("Há ponto sem coordenadas válidas no roteiro da excursão.");}
+    private List<PontoRoteiroExcursaoDTO> roteiroSalvo(ExecucaoExcursao execucao){
+        if(execucao.getSnapshotVersao()!=1)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Versão de roteiro da execução não suportada.");
+        try{
+            var pontos=new ObjectMapper().readValue(execucao.getRoteiroJson(),new TypeReference<List<PontoRoteiroExcursaoDTO>>(){});
+            if(pontos==null||pontos.isEmpty())throw new IllegalArgumentException("Snapshot de roteiro vazio.");
+            return List.copyOf(pontos);
+        }catch(Exception ex){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Roteiro salvo da execução indisponível.");}
+    }
     private PontoRoteiroExcursaoDTO extremo(String tipo,String nome,double lat,double lon){return new PontoRoteiroExcursaoDTO(tipo,null,nome,lat,lon,List.of());}
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
     public List<PontoRoteiroExcursaoDTO> planejamento(Long id,String uid,String sentido,boolean otimizar){
-        if(execucoes.findByExcursaoIdAndSentido(id,sentido).isPresent()){
-            excursoes.consultar(id,uid);throw conflito();
-        }
+        // Autorização antes da leitura de um snapshot que contém pontos privados.
+        excursoes.consultar(id,uid);
+        if(!"IDA".equals(sentido)&&!"VOLTA".equals(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
+        var existente=execucoes.findByExcursaoIdAndSentido(id,sentido);
+        // Quando a excursão já iniciou, a prévia deve mostrar exatamente o
+        // roteiro imutável da execução, inclusive após ela ser finalizada.
+        if(existente.isPresent())return roteiroSalvo(existente.get());
         return calcular(id,uid,sentido,otimizar,true);
     }
     @Transactional(readOnly=true)
@@ -30,21 +45,26 @@ public class RoteiroExcursaoService {
         if(!"IDA".equals(sentido)&&!"VOLTA".equals(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
         boolean volta="VOLTA".equals(sentido);
         if(volta&&(e.retornoEm()==null||e.origemLatitude()==null))throw new IllegalArgumentException("Retorno exige horário de volta e origem operacional configurados.");
-        if(e.estado()!=EstadoExcursao.PUBLICADA||(previa&&!(volta?e.retornoEm():e.partidaEm()).isAfter(clock.instant())))throw conflito();
+        if(!previa&&e.estado()!=EstadoExcursao.PUBLICADA)throw new com.bevans.exception.ConflitoOperacionalException("ESTADO_INVALIDO","Publique a excursão antes de iniciar a execução.");
+        if(previa&&(e.estado()==EstadoExcursao.CANCELADA||e.estado()==EstadoExcursao.CONCLUIDA))throw new com.bevans.exception.ConflitoOperacionalException("ESTADO_INVALIDO","Excursão encerrada. Consulte o roteiro da execução anterior.");
+        // Uma prévia de leitura continua útil após o horário previsto.
+        // A regra de partida é tratada por ExecucaoExcursaoService.
         var confirmadas=inscricoes.findByExcursaoIdAndEstadoOrderByIdAsc(id,StatusInscricaoExcursao.CONFIRMADA);
         var coletas=new ArrayList<PontoRoteiroExcursaoDTO>();
         if(e.modoColeta()==ModoColetaExcursao.PORTA_A_PORTA){
-            for(var i:confirmadas)coletas.add(new PontoRoteiroExcursaoDTO("COLETA",null,i.getNomePonto(),i.getLatitude(),i.getLongitude(),List.of(new PontoRoteiroExcursaoDTO.Participante(i.getId(),i.getNome()))));
+            for(var i:confirmadas){coordenadas(i.getLatitude(),i.getLongitude());coletas.add(new PontoRoteiroExcursaoDTO("COLETA",null,i.getNomePonto(),i.getLatitude(),i.getLongitude(),List.of(new PontoRoteiroExcursaoDTO.Participante(i.getId(),i.getNome()))));}
         }else{
             var porParada=new HashMap<Long,List<PontoRoteiroExcursaoDTO.Participante>>();
             for(var i:confirmadas){
-                if(i.getParada()==null||e.paradas().stream().noneMatch(p->p.id().equals(i.getParada().getId())))throw conflito();
+                if(i.getParada()==null||e.paradas().stream().noneMatch(p->p.id().equals(i.getParada().getId())))throw conflito("Há participante confirmado sem parada ativa nesta excursão.");
                 porParada.computeIfAbsent(i.getParada().getId(),v->new ArrayList<>()).add(new PontoRoteiroExcursaoDTO.Participante(i.getId(),i.getNome()));
             }
-            for(var p:e.paradas())if(porParada.containsKey(p.id()))coletas.add(new PontoRoteiroExcursaoDTO("COLETA",p.id(),p.nome(),p.latitude(),p.longitude(),List.copyOf(porParada.get(p.id()))));
+            for(var p:e.paradas()){coordenadas(p.latitude(),p.longitude());coletas.add(new PontoRoteiroExcursaoDTO("COLETA",p.id(),p.nome(),p.latitude(),p.longitude(),List.copyOf(porParada.getOrDefault(p.id(),List.of()))));}
         }
         if(volta){Collections.reverse(coletas);coletas.replaceAll(p->new PontoRoteiroExcursaoDTO("DESEMBARQUE",p.paradaId(),p.nome(),p.latitude(),p.longitude(),p.participantes()));}
         var pontos=new ArrayList<PontoRoteiroExcursaoDTO>();
+        coordenadas(e.destinoLatitude(),e.destinoLongitude());
+        if(e.origemLatitude()!=null)coordenadas(e.origemLatitude(),e.origemLongitude());
         if(volta)pontos.add(extremo("ORIGEM",e.destinoNome(),e.destinoLatitude(),e.destinoLongitude()));
         else if(e.origemLatitude()!=null)pontos.add(extremo("ORIGEM",e.origemNome(),e.origemLatitude(),e.origemLongitude()));
         pontos.addAll(coletas);

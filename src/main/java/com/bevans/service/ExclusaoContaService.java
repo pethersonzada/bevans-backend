@@ -18,7 +18,7 @@ public class ExclusaoContaService {
         String uid=u.getFirebaseUid();
         // Sem cascata: FKs de histórico, menores, matrículas etc. impedem remoção sem política de retenção.
         try{usuarios.delete(u);usuarios.flush();}catch(org.springframework.dao.DataIntegrityViolationException ex){throw new ConflitoException("Conta possui dados vinculados; definir retenção/pseudonimização antes de excluir");}
-        if(!exclusoes.existsByFirebaseUid(uid)){var e=new ExclusaoConta();e.firebaseUid=uid;e.solicitadaEm=clock.instant();e.proximaTentativa=e.solicitadaEm;exclusoes.saveAndFlush(e);}
+        if(!exclusoes.existsByFirebaseUid(uid)){var e=new ExclusaoConta();e.firebaseUid=uid;e.solicitadaEm=clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS);e.proximaTentativa=e.solicitadaEm;exclusoes.saveAndFlush(e);}
     }
     @Transactional public Pedido reservar(){
         for(var e:exclusoes.pendentes(clock.instant(),PageRequest.of(0,10))){em.refresh(e);

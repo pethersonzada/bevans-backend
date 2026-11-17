@@ -12,6 +12,11 @@ import static org.mockito.Mockito.*;
  "spring.datasource.username=sa","spring.datasource.password=","spring.datasource.driver-class-name=org.h2.Driver",
  "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect","spring.jpa.hibernate.ddl-auto=create-drop","spring.sql.init.mode=never"})
 class ExclusaoContaIntegrationTest {
+    @org.springframework.boot.test.context.TestConfiguration static class Tempo {
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
+        java.time.Clock testeClock(){return java.time.Clock.fixed(java.time.Instant.parse("2030-01-01T12:00:00.123456789Z"),java.time.ZoneId.of("America/Recife"));}
+    }
+    @org.junit.jupiter.api.BeforeEach void isolarFila(){exclusoes.deleteAll();}
     @Autowired UsuarioService service;@Autowired UsuarioRepository usuarios;@Autowired AlunoTurmaRepository matriculas;@Autowired TurmaRepository turmas;
     @Autowired ExclusaoContaService exclusao;@Autowired ExclusaoContaRepository exclusoes;@Autowired AutenticacaoPerfilService perfis;
     @Autowired org.springframework.transaction.PlatformTransactionManager tx;@Autowired java.time.Clock clock;

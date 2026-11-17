@@ -23,7 +23,11 @@ public class CatalogoService {
     }
     private Expression<String> normalizar(CriteriaBuilder b,Expression<String> e) {
         // A mesma função e o mesmo alfabeto para campo e parâmetro em H2/PostgreSQL.
-        return b.function("translate",String.class,b.lower(e),b.literal("áàâãäéèêëíìîïóòôõöúùûüçñýÿ"),b.literal("aaaaaeeeeiiiiooooouuuucnyy"));
+        // Traduza também maiúsculas antes de lower: LC_CTYPE=C do PostgreSQL
+        // não converte Ô/Á/Ç, mesmo com banco UTF-8.
+        return b.lower(b.function("translate",String.class,e,
+                b.literal("áàâãäéèêëíìîïóòôõöúùûüçñýÿÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇÑÝŸ"),
+                b.literal("aaaaaeeeeiiiiooooouuuucnyyaaaaaeeeeiiiiooooouuuucnyy")));
     }
     private Predicate contem(CriteriaBuilder b,Expression<String> campo,String valor) {
         String escapado=valor.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");

@@ -58,24 +58,67 @@ public class OperacaoService {
     }
     private void prepararViagem(Viagem v){
         if(operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,v.getId()).isPresent())return;
-        var o=nova(TipoOperacao.VIAGEM,v.getId(),v.getTurma().getMotorista(),v.getSentido());o.viagem=v;operacoes.saveAndFlush(o);var vistos=new HashSet<Long>();
+        var o=nova(TipoOperacao.VIAGEM,v.getId(),v.getTurma().getMotorista(),v.getSentido());o.viagem=v;var vistos=new HashSet<Long>();
+        LocalDate data=v.getIniciadaEm().atZone(clock.getZone()).toLocalDate();
         var publica=publicas.findByTurmaId(v.getTurma().getId()).orElse(null);
+        List<PontoColetaPrivadaDTO> rota;
         if(publica!=null){
-            var ordem=new HashMap<Long,Integer>();int n=0;var ps=new ArrayList<>(paradas.findByRotaIdOrderByOrdemAscIdAsc(publica.getId()).stream().filter(ParadaPublica::getAtiva).toList());if("VOLTA".equals(v.getSentido()))Collections.reverse(ps);for(var p:ps)ordem.put(p.getId(),n++);
-            for(var e:embarques.findByRotaIdAndDataOperacaoAndSentidoOrderByIdAsc(publica.getId(),LocalDate.now(clock),v.getSentido())){
-                if(e.getStatus()!=StatusEmbarque.APROVADO||e.getVinculoId()==null||!"APROVADO".equals(vinculos.statusAtual(e.getVinculoId())))continue;
-                if(e.getParada()!=null&&!ordem.containsKey(e.getParada().getId()))throw conflito("Parada aprovada não está ativa.");
-                adicionar(o,e.getAluno().getId(),null,e.getAluno().getNome(),e.getParada()==null?null:e.getParada().getId(),e.getParada()==null?n++:ordem.get(e.getParada().getId()),e.getLatitude(),e.getLongitude(),vistos);
-            }
+            rota=roteiroPublico(publica,data,v.getSentido());
         }else{
-            var esperados=presencas.findByDataAndTurmaId(LocalDate.now(clock),v.getTurma().getId()).stream().filter(p->PresencasEsperadas.inclui(p.getStatus(),v.getSentido())).map(p->p.getUsuario().getId()).collect(java.util.stream.Collectors.toSet());
-            if(!esperados.isEmpty()){
-                var rota=coletas.roteiroSistema(v.getTurma().getId(),v.getSentido(),false);int n=0;
-                for(var p:rota){for(var a:p.passageiros())adicionar(o,a.getId(),null,a.getNome(),p.paradaId(),n,p.latitude(),p.longitude(),vistos);n++;}
-                if(!vistos.equals(esperados))throw conflito("Há passageiros sem ponto confirmado; revise o planejamento.");
+            rota=coletas.roteiroSistema(v.getTurma().getId(),v.getSentido(),false);
+            var esperados=presencas.findByDataAndTurmaId(data,v.getTurma().getId()).stream().filter(p->PresencasEsperadas.inclui(p.getStatus(),v.getSentido())).map(p->p.getUsuario().getId()).collect(java.util.stream.Collectors.toSet());
+            var presentes=rota.stream().flatMap(p->p.passageiros().stream()).map(PassageiroRotaDTO::getId).collect(java.util.stream.Collectors.toSet());
+            if(!presentes.equals(esperados))throw conflito("Há passageiros sem ponto confirmado; revise o planejamento.");
+        }
+        try{o.salvarRoteiro(new ObjectMapper().writeValueAsString(rota));}catch(Exception ex){throw conflito("Não foi possível salvar o roteiro operacional.");}
+        operacoes.saveAndFlush(o);int n=0;
+        for(var p:rota){for(var a:p.passageiros())adicionar(o,a.getId(),null,a.getNome(),p.paradaId(),n,p.latitude(),p.longitude(),vistos);n++;}
+        Integer capacidade=turmas.capacidadeAtual(v.getTurma().getId());
+        if(capacidade!=null&&vistos.size()>capacidade)throw conflito("Passageiros confirmados excedem a capacidade da viagem.");
+        registros.flush();publisher.publishEvent(new EventosDeViagem.Operacao(o.id,null,"VIAGEM_INICIADA","CICLO:"+o.id+":INICIADA"));
+    }
+
+    private void pontoPublicoValido(double lat,double lon){
+        if(!Double.isFinite(lat)||!Double.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180||(lat==0&&lon==0))throw conflito("Rota pública possui ponto sem coordenadas válidas.");
+    }
+    private List<PontoColetaPrivadaDTO> roteiroPublico(RotaPublica r,LocalDate data,String sentido){
+        boolean volta="VOLTA".equals(sentido);
+        if(!r.getAtiva()||!r.getPublicada())throw conflito("Publique e ative a rota pública antes de iniciar.");
+        if(!r.getDias().contains(data.getDayOfWeek())||(volta?r.getHorarioVolta():r.getHorarioIda())==null)throw conflito("A rota pública não funciona neste dia e sentido.");
+        var ps=new ArrayList<>(paradas.findByRotaIdOrderByOrdemAscIdAsc(r.getId()).stream().filter(ParadaPublica::getAtiva).toList());
+        if(volta)Collections.reverse(ps);
+        var ids=ps.stream().map(ParadaPublica::getId).collect(java.util.stream.Collectors.toSet());
+        var membros=new HashMap<Long,List<PassageiroRotaDTO>>();var excepcionais=new ArrayList<PontoColetaPrivadaDTO>();
+        for(var e:embarques.findByRotaIdAndDataOperacaoAndSentidoOrderByIdAsc(r.getId(),data,sentido)){
+            if(e.getStatus()!=StatusEmbarque.APROVADO||e.getVinculoId()==null||!"APROVADO".equals(vinculos.statusAtual(e.getVinculoId())))continue;
+            var a=new PassageiroRotaDTO(e.getAluno().getId(),e.getAluno().getNome(),e.getLatitude(),e.getLongitude());
+            if(e.getParada()!=null){
+                if(!ids.contains(e.getParada().getId()))throw conflito("Parada aprovada não está ativa nesta rota.");
+                membros.computeIfAbsent(e.getParada().getId(),k->new ArrayList<>()).add(a);
+            }else{
+                pontoPublicoValido(e.getLatitude(),e.getLongitude());
+                excepcionais.add(new PontoColetaPrivadaDTO("EXCEPCIONAL",null,e.getNomePonto(),e.getLatitude(),e.getLongitude(),List.of(a)));
             }
         }
-        registros.flush();publisher.publishEvent(new EventosDeViagem.Operacao(o.id,null,"VIAGEM_INICIADA","CICLO:"+o.id+":INICIADA"));
+        var pontos=new ArrayList<PontoColetaPrivadaDTO>();
+        pontos.add(new PontoColetaPrivadaDTO("ORIGEM",null,volta?r.getDestinoNome():r.getOrigemNome(),volta?r.getDestinoLatitude():r.getOrigemLatitude(),volta?r.getDestinoLongitude():r.getOrigemLongitude(),List.of()));
+        for(var p:ps)pontos.add(new PontoColetaPrivadaDTO("PARADA",p.getId(),p.getNome(),p.getLatitude(),p.getLongitude(),List.copyOf(membros.getOrDefault(p.getId(),List.of()))));
+        pontos.addAll(excepcionais);
+        pontos.add(new PontoColetaPrivadaDTO("DESTINO",null,volta?r.getOrigemNome():r.getDestinoNome(),volta?r.getOrigemLatitude():r.getDestinoLatitude(),volta?r.getOrigemLongitude():r.getDestinoLongitude(),List.of()));
+        pontos.forEach(p->pontoPublicoValido(p.latitude(),p.longitude()));
+        // Mesma política da prévia otimizada: FIXA mantém a sequência obrigatória.
+        if(r.getModo()==ModoRota.FIXA)return List.copyOf(pontos);
+        var entrada=new ArrayList<PontoPublicoDTO>();for(int n=0;n<pontos.size();n++){var p=pontos.get(n);entrada.add(new PontoPublicoDTO((long)n,p.nome(),p.latitude(),p.longitude()));}
+        return OtimizadorParadas.ordenar(entrada).stream().map(p->pontos.get(Math.toIntExact(p.paradaId()))).toList();
+    }
+
+    @Transactional(readOnly=true) public List<PontoColetaPrivadaDTO> roteiroViagem(Long ref,String uid){
+        var o=buscar(TipoOperacao.VIAGEM,ref);dono(o,uid);
+        if(o.getRoteiroJson()==null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Esta operação antiga não possui roteiro completo salvo. Não é seguro reconstruí-lo com dados atuais.");
+        try{
+            List<PontoColetaPrivadaDTO> pontos=new ObjectMapper().readValue(o.getRoteiroJson(),new TypeReference<List<PontoColetaPrivadaDTO>>(){});
+            if(pontos==null||pontos.size()<2)throw new IllegalArgumentException();return List.copyOf(pontos);
+        }catch(Exception ex){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Roteiro operacional salvo indisponível.");}
     }
     private void prepararExcursao(ExecucaoExcursao x){
         if(operacoes.findByTipoAndReferenciaId(TipoOperacao.EXCURSAO,x.getId()).isPresent())return;
@@ -128,5 +171,10 @@ public class OperacaoService {
     @Transactional(readOnly=true) public List<OperacaoDTO.Evento> historicoWeb(Long ref,String token){return historico(web(buscar(TipoOperacao.EXCURSAO,ref),token));}
     private List<OperacaoDTO.Evento> historico(RegistroOperacional r){return eventos.findByRegistroIdOrderByIdAsc(r.id).stream().map(e->new OperacaoDTO.Evento(e.id,e.anterior,e.novo,e.autor,e.origem,e.criadoEm,e.correcao,e.motivo,e.versaoRegistro)).toList();}
     private OperacaoDTO.Registro dto(RegistroOperacional r){return new OperacaoDTO.Registro(r.id,r.aluno==null?null:r.aluno.getId(),r.inscricao==null?null:r.inscricao.getId(),r.nome,r.estado,r.versao,r.autor,r.origem,r.atualizadoEm,r.paradaId,r.ordem);}
-    @Transactional(readOnly=true) public List<PassageiroRotaDTO> rotaAtiva(Long turma,String sentido){var v=viagens.findFirstByTurmaIdAndStatus(turma,"EM_ANDAMENTO").filter(x->sentido.equals(x.getSentido())).orElse(null);if(v==null)return null;var o=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,v.getId()).orElse(null);return o==null?null:registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id).stream().map(r->new PassageiroRotaDTO(r.aluno.getId(),r.nome,r.latitude,r.longitude)).toList();}
+    @Transactional(readOnly=true) public List<PassageiroRotaDTO> rotaAtiva(Long turma,String sentido){
+        var v=viagens.findFirstByTurmaIdAndStatus(turma,"EM_ANDAMENTO").orElse(null);if(v==null)return null;
+        if(!sentido.equals(v.getSentido()))throw conflito("A viagem ativa utiliza outro sentido. Encerre-a antes de planejar a próxima.");
+        var o=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,v.getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Snapshot operacional da viagem ativa indisponível."));
+        return registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id).stream().map(r->new PassageiroRotaDTO(r.aluno.getId(),r.nome,r.latitude,r.longitude)).toList();
+    }
 }

@@ -54,6 +54,8 @@ public class RotaController {
     private final ViagemService viagemService;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private com.bevans.service.ColetaPrivadaService coletaPrivada;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private java.time.Clock clock=java.time.Clock.system(ZoneId.of("America/Recife"));
 
     public RotaController(
             PresencaRepository presencaRepository,
@@ -74,9 +76,7 @@ public class RotaController {
     }
 
     private LocalDate hoje() {
-        return LocalDate.now(
-                ZoneId.of("America/Recife")
-        );
+        return LocalDate.now(clock);
     }
 
     private boolean passageiroAprovado(

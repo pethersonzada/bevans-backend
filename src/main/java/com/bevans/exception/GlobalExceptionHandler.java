@@ -166,6 +166,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     public ResponseEntity<Object> statusDeDominio(org.springframework.web.server.ResponseStatusException ex, WebRequest request) {
-        return resposta(HttpStatus.valueOf(ex.getStatusCode().value()), ex.getReason()==null?"Recurso indisponível.":ex.getReason(), request);
+        var resultado=resposta(HttpStatus.valueOf(ex.getStatusCode().value()), ex.getReason()==null?"Recurso indisponível.":ex.getReason(), request);
+        if(ex instanceof ConflitoOperacionalException conflito && resultado.getBody() instanceof Map<?,?> body){
+            var campos=new LinkedHashMap<Object,Object>(body);campos.put("codigo",conflito.getCodigo());
+            return ResponseEntity.status(resultado.getStatusCode()).body(campos);
+        }
+        return resultado;
     }
 }

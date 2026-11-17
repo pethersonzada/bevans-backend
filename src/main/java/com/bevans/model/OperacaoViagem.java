@@ -10,4 +10,7 @@ public class OperacaoViagem {
     @ManyToOne(optional=false) @JoinColumn(name="motorista_id",nullable=false) public Usuario motorista;
     @Column(nullable=false,length=5) public String sentido;
     @Version public long versao;
+    @Column(columnDefinition="text",updatable=false) private String roteiroJson;
+    public String getRoteiroJson(){return roteiroJson;}
+    public void salvarRoteiro(String json){if(roteiroJson!=null)throw new IllegalStateException("Roteiro já registrado.");roteiroJson=json;}
 }

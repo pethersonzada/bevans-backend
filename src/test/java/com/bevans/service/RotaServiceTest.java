@@ -131,7 +131,7 @@ class RotaServiceTest {
         p.setEndereco(p.getEnderecoVolta());
         p.setEnderecoIda(null);
         preparar(turma, p);
-        assertTrue(ids("IDA", 1).isEmpty());
+        assertPontoInvalido();
         assertEquals(List.of(2L), ids("VOLTA", 1));
         verifyNoInteractions(enderecos);
     }
@@ -153,9 +153,9 @@ class RotaServiceTest {
         Presenca p = presenca(2, -8.02);
         p.getEnderecoIda().setUsuario(presenca(3, -8.03).getUsuario());
         preparar(turma, p);
-        assertTrue(ids("IDA", 1).isEmpty());
+        assertPontoInvalido();
         p.getEnderecoIda().setUsuario(null);
-        assertTrue(ids("IDA", 1).isEmpty());
+        assertPontoInvalido();
     }
 
     @ParameterizedTest
@@ -164,7 +164,7 @@ class RotaServiceTest {
         Presenca p = presenca(2, lat);
         p.getEnderecoIda().setLongitude(lon);
         preparar(turma, p);
-        assertTrue(ids("IDA", 1).isEmpty());
+        assertPontoInvalido();
     }
 
     @Test
@@ -172,7 +172,18 @@ class RotaServiceTest {
         Presenca p = presenca(2, -8.02);
         p.getEnderecoIda().setLatitude(null);
         preparar(turma, p);
-        assertTrue(ids("IDA", 1).isEmpty());
+        assertPontoInvalido();
+    }
+
+    private void assertPontoInvalido(){
+        var erro=assertThrows(com.bevans.exception.ConflitoOperacionalException.class,()->ids("IDA",1));
+        assertEquals(409,erro.getStatusCode().value());assertEquals("PONTO_INVALIDO",erro.getCodigo());
+        assertTrue(erro.getReason().contains("IDA"));
+    }
+
+    @Test void umEnderecoInvalidoNaoRetornaRoteiroParcial(){
+        var invalida=presenca(3,-8.03);invalida.setEnderecoIda(null);
+        preparar(turma,presenca(2,-8.02),invalida);assertPontoInvalido();
     }
 
     @Test

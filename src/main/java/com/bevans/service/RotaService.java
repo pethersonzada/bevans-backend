@@ -36,6 +36,7 @@ public class RotaService {
     private org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> coletas;
     @org.springframework.beans.factory.annotation.Autowired(required=false) private java.time.Clock clock;
     @org.springframework.beans.factory.annotation.Autowired private org.springframework.beans.factory.ObjectProvider<OperacaoService> operacoes;
+    @org.springframework.beans.factory.annotation.Autowired(required=false) private com.bevans.repository.RotaPublicaRepository publicas;
     @org.springframework.beans.factory.annotation.Autowired
     public RotaService(PresencaRepository p,TurmaRepository t,EnderecoRepository e,org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> c){this(p,t,e);coletas=c;}
 
@@ -171,9 +172,18 @@ public class RotaService {
         boolean isVolta =
                 sentido.equalsIgnoreCase("VOLTA");
         if(operacoes!=null&&operacoes.getIfAvailable()!=null){var salva=operacoes.getObject().rotaAtiva(turmaId,isVolta?"VOLTA":"IDA");if(salva!=null)return CompletableFuture.completedFuture(salva);}
+        return CompletableFuture.completedFuture(planejarPrivada(sentido,turmaId));
+    }
+
+    // Executado na transação de início: não consulta o snapshot ainda em construção
+    // nem transfere a leitura de presenças para outra thread.
+    public List<PassageiroRotaDTO> planejarPrivada(String sentido,Long turmaId) {
+        if(!"IDA".equalsIgnoreCase(sentido)&&!"VOLTA".equalsIgnoreCase(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
+        boolean isVolta="VOLTA".equalsIgnoreCase(sentido);
+        if(publicas!=null&&publicas.findByTurmaId(turmaId).isPresent())throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"Rota pública utiliza planejamento de embarques, não presenças privadas.");
         var coleta=coletas==null?null:coletas.getIfAvailable();
-        if(coleta!=null&&coleta.usaParadas(turmaId,isVolta?"VOLTA":"IDA"))return CompletableFuture.completedFuture(
-                coleta.roteiroSistema(turmaId,isVolta?"VOLTA":"IDA",false).stream().flatMap(p->p.passageiros().stream()).toList());
+        if(coleta!=null&&coleta.usaParadas(turmaId,isVolta?"VOLTA":"IDA"))return
+                coleta.roteiroSistema(turmaId,isVolta?"VOLTA":"IDA",false).stream().flatMap(p->p.passageiros().stream()).toList();
 
         // 1. Buscar a turma.
 
@@ -261,7 +271,7 @@ public class RotaService {
                     || enderecoEscolhido.getUsuario() == null
                     || aluno.getId() == null
                     || !aluno.getId().equals(enderecoEscolhido.getUsuario().getId())) {
-                continue;
+                throw pontoInvalido(sentido);
             }
 
             Double latFinal =
@@ -277,7 +287,7 @@ public class RotaService {
                     latFinal,
                     lonFinal
             )) {
-                continue;
+                throw pontoInvalido(sentido);
             }
 
             passageirosDTO.add(
@@ -311,9 +321,7 @@ public class RotaService {
         // 6. Nenhum passageiro confirmado para este sentido.
 
         if (passageirosDTO.isEmpty()) {
-            return CompletableFuture.completedFuture(
-                    new ArrayList<>()
-            );
+            return List.of();
         }
 
         latsList.add(destinoLat);
@@ -373,6 +381,8 @@ public class RotaService {
 
         RoutingModel routing =
                 new RoutingModel(manager);
+        Assignment solution = null;
+        try {
 
         // 11. Configurar custo de deslocamento.
 
@@ -399,7 +409,7 @@ public class RotaService {
 
         // 12. Executar algoritmo OR-Tools.
 
-        Assignment solution =
+        solution =
                 routing.solveWithParameters(
                         main.defaultRoutingSearchParameters()
                                 .toBuilder()
@@ -407,11 +417,12 @@ public class RotaService {
                                         FirstSolutionStrategy.Value
                                                 .PATH_CHEAPEST_ARC
                                 )
+                                .setTimeLimit(com.google.protobuf.Duration.newBuilder().setSeconds(2).build())
                                 .build()
                 );
 
         if (solution == null) {
-            throw new RuntimeException(
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
                     "Falha na otimização da rota. "
                     + "Nenhum caminho encontrado."
             );
@@ -441,8 +452,15 @@ public class RotaService {
 
         // 14. Retornar ordem de paradas.
 
-        return CompletableFuture.completedFuture(
-                rotaOtimizada
-        );
+        return rotaOtimizada;
+        } finally {
+            if(solution!=null)solution.delete();
+            routing.delete();manager.delete();
+        }
+    }
+
+    private org.springframework.web.server.ResponseStatusException pontoInvalido(String sentido) {
+        return new com.bevans.exception.ConflitoOperacionalException("PONTO_INVALIDO",
+                "Há passageiro confirmado sem endereço próprio e coordenadas válidas para "+sentido.toUpperCase(java.util.Locale.ROOT)+". Revise o ponto ou a presença antes de iniciar.");
     }
 }

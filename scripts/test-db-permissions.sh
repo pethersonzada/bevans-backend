@@ -58,13 +58,19 @@ echo "PASSOU: role sem privilégios não acessa a tabela."
 
 echo "=== APLICANDO CORREÇÃO ==="
 
-for tentativa in 1 2; do
-    psqlcmd -q \
-        -v app_role="$ROLE" \
-        -v owner_role=postgres \
-        -v schema_name="$SCHEMA" \
-        < scripts/sql/grant-app-permissions.sql
+if [ "$LOCAL" != "1" ]; then
+    if PGDATABASE="$DB" BEVANS_CONFIRMAR_DB="" bash scripts/aplicar-permissoes-pos-migracao.sh --apply "$ROLE" postgres "$SCHEMA" >/dev/null 2>&1; then
+        echo "FALHOU: aceitou execução sem confirmação."
+        exit 1
+    fi
+fi
 
+for tentativa in 1 2; do
+    if [ "$LOCAL" = "1" ]; then
+        psqlcmd -q -v app_role="$ROLE" -v owner_role=postgres -v schema_name="$SCHEMA" < scripts/sql/grant-app-permissions.sql
+    else
+        PGDATABASE="$DB" BEVANS_CONFIRMAR_DB="$DB" bash scripts/aplicar-permissoes-pos-migracao.sh --apply "$ROLE" postgres "$SCHEMA"
+    fi
     echo "PASSOU: aplicação $tentativa."
 done
 

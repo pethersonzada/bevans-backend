@@ -122,3 +122,61 @@ e canais SSE. Alertas devem usar IDs técnicos e métricas, sem payload pessoal.
 Não há comprovação de prontidão de produção enquanto essas etapas externas
 estiverem pendentes. O resultado local não equivale a validação de frontend,
 webapp, aparelhos, Nginx ou Oracle Cloud.
+
+
+## Permissões PostgreSQL após migrações (#57)
+
+Depois de cada migração SQL autorizada, aplicar os privilégios
+necessários antes de liberar a nova versão da API.
+
+### Procedimento
+
+1. Confirmar o banco, host, porta e usuário administrativo.
+2. Fazer backup e aplicar somente as migrações pendentes.
+3. Executar o script de permissões.
+4. Validar o acesso da aplicação antes de liberar a API.
+
+### Configuração
+
+Definir as variáveis de ambiente:
+
+- PGHOST: host PostgreSQL autorizado.
+- PGPORT: porta PostgreSQL.
+- PGDATABASE: banco de destino.
+- PGUSER: usuário administrativo.
+- BEVANS_CONFIRMAR_DB: confirmação explícita do banco.
+
+Comando de aplicação:
+
+`bash scripts/aplicar-permissoes-pos-migracao.sh --apply vanapp_user postgres public`
+
+O script exige confirmação do banco e executa os GRANTs
+em uma transação PostgreSQL.
+
+O arquivo scripts/sql/grant-app-permissions.sql concede
+SELECT, INSERT, UPDATE e DELETE nas tabelas existentes,
+USAGE e SELECT nas sequências e privilégios padrão
+para novos objetos criados pela role responsável.
+
+### Validação automatizada
+
+O GitHub Actions executa scripts/test-db-permissions.sh
+em PostgreSQL 16 isolado.
+
+O teste verifica:
+
+- Bloqueio da execução sem confirmação.
+- Reaplicação dos privilégios.
+- Leitura, inserção, atualização e exclusão.
+- Acesso às sequências.
+- Privilégios de tabelas e sequências futuras.
+
+### Segurança operacional
+
+Não executar migrações ou GRANTs em produção durante testes.
+
+A confirmação do banco não substitui autorização, backup,
+revisão do destino e planejamento de rollback.
+
+O procedimento de permissões não executa migrações
+automaticamente.

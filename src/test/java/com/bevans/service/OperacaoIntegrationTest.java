@@ -31,6 +31,7 @@ class OperacaoIntegrationTest {
     @Autowired ExecucaoExcursaoService execucoes;@Autowired RotaPublicaService publicas;@Autowired EmbarqueService embarques;
     @Autowired ColetaPrivadaService coletas;@Autowired OperacaoViagemRepository operacoes;@Autowired RegistroOperacionalRepository registros;
     @Autowired ParadaPublicaRepository paradasPublicas;
+    @Autowired RotaPublicaRepository rotasPublicasRepo;
     @Autowired NotificacaoService notificacoes;@Autowired NotificacaoRepository notificacaoRepo;
     @Autowired OutboxNotificacaoRepository outbox;@Autowired DispositivoNotificacaoService dispositivos;
     @Autowired DispositivoNotificacaoRepository dispositivoRepo;@Autowired EntregaPushService pushes;
@@ -95,6 +96,71 @@ class OperacaoIntegrationTest {
         assertThrows(AccessDeniedException.class,()->service.roteiroViagem(primeira,c.aluno().getFirebaseUid()));
         viagens.encerrarRota(c.turma().getId());Long segunda=iniciar(c,"IDA");assertNotEquals(primeira,segunda);
         assertEquals(-8.16,service.roteiroViagem(segunda,uid).get(1).latitude());assertEquals(-8.1,service.roteiroViagem(primeira,uid).get(1).latitude());
+    }
+
+    private void assertInicioPublicoBloqueado(Long turmaId, Long rotaId) {
+        long operacoesAntes = operacoes.count();
+
+        assertThrows(com.bevans.exception.ConflitoException.class,
+            () -> viagens.iniciarRota(turmaId, "IDA", "PUBLICA", rotaId));
+
+        assertFalse(viagens.rotaAtiva(turmaId));
+        assertEquals(operacoesAntes, operacoes.count());
+    }
+
+    @Test void inicioPublicoRejeitaConfiguracoesInvalidas() {
+        var c = cenario();
+        Long turmaId = c.turma().getId();
+        Long motoristaId = c.dono().getId();
+
+        var dados = new RotaPublicaRequest(
+            turmaId, "Rota de teste", "Recife",
+            CategoriaRota.OUTROS, ModoRota.FIXA,
+            "Origem", -8.04, -35.04,
+            "Destino", -8.4, -35.4,
+            null, null, null,
+            EnumSet.allOf(DayOfWeek.class),
+            LocalTime.of(7, 0), LocalTime.of(18, 0)
+        );
+
+        Long rotaId = publicas.criar(motoristaId, dados).id();
+
+        // Rota não publicada.
+        assertInicioPublicoBloqueado(turmaId, rotaId);
+
+        publicas.publicar(rotaId, motoristaId, true);
+
+        // Rota desativada.
+        publicas.disponibilidade(rotaId, motoristaId, false);
+        assertInicioPublicoBloqueado(turmaId, rotaId);
+
+        publicas.disponibilidade(rotaId, motoristaId, true);
+        publicas.publicar(rotaId, motoristaId, true);
+
+        // Capacidade não configurada, inclusive em dado legado.
+        var turma = turmas.findById(turmaId).orElseThrow();
+        turma.setCapacidade(null);
+        turmas.saveAndFlush(turma);
+        assertInicioPublicoBloqueado(turmaId, rotaId);
+
+        turma.setCapacidade(12);
+        turmas.saveAndFlush(turma);
+
+        // Dia diferente do dia atual.
+        var rota = rotasPublicasRepo.findById(rotaId).orElseThrow();
+        rota.getDias().clear();
+        rota.getDias().add(
+            LocalDate.now(clock).getDayOfWeek().plus(1)
+        );
+        rota = rotasPublicasRepo.saveAndFlush(rota);
+        assertInicioPublicoBloqueado(turmaId, rotaId);
+
+        // IDA sem horário, mantendo VOLTA configurada.
+        rota.getDias().clear();
+        rota.getDias().add(LocalDate.now(clock).getDayOfWeek());
+        rota.setHorarioIda(null);
+        rotasPublicasRepo.saveAndFlush(rota);
+        assertInicioPublicoBloqueado(turmaId, rotaId);
     }
 
     @Test void rascunhoPublicoNaoInterfereNoRoteiroPrivado(){

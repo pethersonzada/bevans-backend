@@ -54,11 +54,8 @@ public class ViagemService {
         if("PRIVADA".equals(modalidade)){
             if(rotaPublicaId!=null)throw new IllegalArgumentException("Viagem privada não aceita ID de publicação pública.");
         }else if("PUBLICA".equals(modalidade)){
-            if(rotaPublicaId==null||rotasPublicas==null)throw new IllegalArgumentException("Informe a rota pública da viagem.");
-            var rota=rotasPublicas.findById(rotaPublicaId)
-                .orElseThrow(()->new RecursoNaoEncontradoException("Rota pública não encontrada."));
-            if(rota.getTurma()==null||!java.util.Objects.equals(rota.getTurma().getId(),turmaId))
-                throw new IllegalArgumentException("Rota pública não pertence à turma informada.");
+            if(rotaPublicaId==null||rotasPublicas==null)
+                throw new IllegalArgumentException("Informe a rota pública da viagem.");
         }else throw new IllegalArgumentException("Informe modalidade PRIVADA ou PUBLICA.");
         Turma turma = turmaRepository.lockById(turmaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Turma não encontrada no sistema."));
@@ -67,6 +64,42 @@ public class ViagemService {
         
         if (viagemAtiva.isPresent()) {
             throw new ConflitoException("Já existe uma rota em andamento exclusivamente para esta turma.");
+        }
+
+        // Valida a rota pública após bloquear a turma. A publicação e
+        // disponibilidade também são alteradas sob esse bloqueio.
+        if ("PUBLICA".equals(modalidade)) {
+            var rota = rotasPublicas.findById(rotaPublicaId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException(
+                    "Rota pública não encontrada."));
+
+            if (rota.getTurma() == null ||
+                    !java.util.Objects.equals(rota.getTurma().getId(), turmaId))
+                throw new IllegalArgumentException(
+                    "Rota pública não pertence à turma informada.");
+
+            if (!rota.getPublicada() || !rota.getAtiva())
+                throw new ConflitoException(
+                    "Publique e ative a rota pública antes de iniciar.");
+
+            Integer capacidade = turmaRepository.capacidadeAtual(turmaId);
+            if (capacidade == null || capacidade < 1)
+                throw new ConflitoException(
+                    "Configure a capacidade antes de iniciar a rota pública.");
+
+            var hoje = java.time.LocalDate.now(clock);
+            if (rota.getDias() == null ||
+                    !rota.getDias().contains(hoje.getDayOfWeek()))
+                throw new ConflitoException(
+                    "A rota pública não opera no dia de hoje.");
+
+            var horario = "IDA".equals(sentido)
+                ? rota.getHorarioIda() : rota.getHorarioVolta();
+
+            if (horario == null)
+                throw new ConflitoException(
+                    "Configure o horário de " + sentido +
+                    " antes de iniciar a rota pública.");
         }
         // Rotas privadas: não iniciar silenciosamente com passageiros
         // aprovados que ainda não confirmaram a presença do dia.

@@ -157,10 +157,14 @@ class RotaPrivadaHttpIntegrationTest {
                 .andExpect(jsonPath("$.registros[0].alunoId")
                     .value(c.passageiro().getId().intValue()));
 
-            mvc.perform(get("/rota/otimizar")
+            var requisicaoAssincrona = mvc.perform(get("/rota/otimizar")
                     .param("turmaId", c.turma().getId().toString())
                     .param("sentido", "IDA")
                     .header("Authorization", "Bearer " + TOKEN))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+            mvc.perform(asyncDispatch(requisicaoAssincrona))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id")
                     .value(c.passageiro().getId().intValue()));

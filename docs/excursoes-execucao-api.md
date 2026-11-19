@@ -21,13 +21,14 @@ Após o primeiro início, nenhuma edição de coleta/capacidade/datas nem cadast
 confirmação ou cancelamento individual é aceita, mesmo se o motorista iniciou
 antes do horário previsto. Convites ficam indisponíveis para novos acessos.
 Consulta individual por credencial continua sendo apenas da própria inscrição.
-Prévia de um sentido já executado retorna 409: consultar a execução real.
+Prévia de um sentido já executado retorna o snapshot imutável da execução, inclusive após sua finalização. A consulta não recalcula o roteiro.
 Não há replanejamento ou reinício de sentido finalizado/cancelado nesta versão.
 
-O motorista pode iniciar com atraso: início efetivo calcula sob lock e não
-depende de a prévia anterior ao horário ainda estar disponível. A ação é
-explícita do organizador, não automática pelo relógio/GPS. Não há janela mínima
-antes da partida; essa política não foi inventada no backend.
+O motorista pode iniciar com atraso, sem prazo máximo de tolerância,
+enquanto a excursão permanecer PUBLICADA e as demais pré-condições forem
+atendidas. A prévia continua disponível após o horário previsto.
+Não há partida automática pelo relógio ou GPS. A regra não exige uma janela
+mínima antes do horário previsto.
 
 Estados da execução: EM_ANDAMENTO, FINALIZADA, CANCELADA. Finalização repetida é
 idempotente; finalização de cancelada recebe 409. Sem retornoEm, finalizar IDA

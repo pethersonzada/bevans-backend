@@ -27,16 +27,21 @@ estado físico de embarque. O adaptador interno usa o DTO de coordenadas do
 algoritmo existente; não cria nem consulta entidades ParadaPublica.
 
 Consulta em transação repeatable-read mantém uma visão consistente de excursão,
-paradas e confirmados. Excursão precisa estar PUBLICADA e antes do horário do
-sentido pedido. Cancelada, concluída ou após a partida desse sentido retorna
-409. IDA/VOLTA inválido ou volta/origem ausente recebe 400. Falha de otimização
-retorna erro tratado pelo otimizador; não devolve sucesso com ordem inventada.
+paradas e confirmados. Antes da execução, a prévia está disponível para
+excursões em RASCUNHO ou PUBLICADA, inclusive após o horário previsto.
+Quando já existe execução do sentido, a resposta utiliza seu snapshot
+persistido, inclusive após a finalização, sem reotimização.
+Excursão CANCELADA ou CONCLUIDA sem snapshot daquele sentido não permite
+calcular uma nova prévia. IDA/VOLTA inválido ou volta/origem ausente recebe 400.
+Falhas de planejamento retornam erro explícito, sem ordem inventada.
 
 Início/encerramento com snapshot persistido foi acrescentado no incremento 012;
-consultar `excursoes-execucao-api.md`. Prévia de sentido já executado recebe 409
-e não altera o snapshot. Controle compartilhado de embarque/desembarque #46 e
-notificações #47 continuam pendentes. Não há GPS público de Excursões. A prévia
-em si utiliza inscrições/paradas persistidas por 009–011, sem tabela paralela.
+consultar `excursoes-execucao-api.md`. Prévia de sentido já executado retorna o
+snapshot salvo e não altera seu conteúdo. A criação de uma segunda execução do
+mesmo sentido finalizado é bloqueada com EXECUCAO_EXISTENTE. O início tardio
+é permitido enquanto a excursão permanecer PUBLICADA, respeitando a sequência
+IDA antes de VOLTA. A prévia utiliza inscrições e paradas persistidas,
+sem tabela paralela.
 
 Testes exercitam OR-Tools nativo nos três modos, exclusão de pendentes,
 privacidade, isolamento entre motoristas, sequência fixa/volta, extremos e

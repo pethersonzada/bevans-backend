@@ -28,7 +28,7 @@ class OperacaoIntegrationTest {
     @Autowired UsuarioRepository usuarios;@Autowired TurmaRepository turmas;@Autowired AlunoTurmaRepository vinculos;
     @Autowired EnderecoRepository enderecos;@Autowired PresencaRepository presencas;@Autowired Clock clock;
     @Autowired ExcursaoService excursoes;@Autowired ConviteExcursaoService convites;@Autowired InscricaoExcursaoService inscricoes;
-    @Autowired ExecucaoExcursaoService execucoes;@Autowired RotaPublicaService publicas;@Autowired EmbarqueService embarques;
+    @Autowired ExecucaoExcursaoService execucoes;@Autowired RoteiroExcursaoService roteirosExcursao;@Autowired RotaPublicaService publicas;@Autowired EmbarqueService embarques;
     @Autowired ColetaPrivadaService coletas;@Autowired OperacaoViagemRepository operacoes;@Autowired RegistroOperacionalRepository registros;
     @Autowired ParadaPublicaRepository paradasPublicas;
     @Autowired RotaPublicaRepository rotasPublicasRepo;
@@ -386,6 +386,92 @@ class OperacaoIntegrationTest {
         service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.NAO_EMBARCOU,0));viagens.encerrarRota(c.turma().getId());Long volta=iniciar(c,"VOLTA");
         assertNotEquals(id,volta);assertEquals(EstadoOperacional.AGUARDANDO,service.minha(volta,c.aluno().getFirebaseUid()).estado());assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().naoEmbarcaram());
     }
+
+    @Test void excursaoPermitePartidaAtrasadaEPreservaPreviaHistorica() {
+        var dono = usuario("MOTORISTA");
+        var outro = usuario("MOTORISTA");
+        String uid = dono.getFirebaseUid();
+
+        var partida = clock.instant().plusSeconds(3600);
+        var retorno = clock.instant().plusSeconds(7200);
+
+        var e = excursoes.criar(uid, new ExcursaoRequest(
+            "Excursão com atraso",
+            "Destino", -8.3, -35.3,
+            "Origem", -8.0, -35.0,
+            partida, retorno, 12, null
+        ));
+
+        e = excursoes.publicar(e.id(), uid, e.versao());
+        Long id = e.id();
+
+        var previaIda = roteirosExcursao.planejamento(
+            id, uid, "IDA", false
+        );
+
+        // VOLTA exige IDA finalizada.
+        var bloqueio = assertThrows(
+            com.bevans.exception.ConflitoOperacionalException.class,
+            () -> execucoes.iniciar(id, uid, "VOLTA", false)
+        );
+        assertEquals("IDA_NAO_FINALIZADA", bloqueio.getCodigo());
+
+        // No horário exato, a prévia continua disponível.
+        ((Relogio) clock).agora = partida;
+        assertEquals(previaIda,
+            roteirosExcursao.planejamento(id, uid, "IDA", false));
+
+        // Partida atrasada é permitida pela regra atual.
+        ((Relogio) clock).agora = partida.plusSeconds(600);
+
+        var ida = execucoes.iniciar(id, uid, "IDA", false);
+        assertEquals(previaIda, ida.pontos());
+
+        // Repetir início ativo retorna a mesma execução.
+        assertEquals(ida.id(),
+            execucoes.iniciar(id, uid, "IDA", true).id());
+
+        // A prévia agora consulta o snapshot, sem recalcular.
+        assertEquals(ida.pontos(),
+            roteirosExcursao.planejamento(id, uid, "IDA", true));
+
+        execucoes.finalizar(id, ida.id(), uid);
+
+        // VOLTA também pode partir depois do horário previsto.
+        ((Relogio) clock).agora = retorno.plusSeconds(600);
+
+        var previaVolta = roteirosExcursao.planejamento(
+            id, uid, "VOLTA", false
+        );
+
+        var volta = execucoes.iniciar(id, uid, "VOLTA", false);
+        assertEquals(previaVolta, volta.pontos());
+
+        execucoes.finalizar(id, volta.id(), uid);
+
+        // Mesmo com excursão concluída, ambos os roteiros
+        // históricos continuam acessíveis ao organizador.
+        assertEquals(ida.pontos(),
+            roteirosExcursao.planejamento(id, uid, "IDA", false));
+        assertEquals(volta.pontos(),
+            roteirosExcursao.planejamento(id, uid, "VOLTA", false));
+
+        // Um sentido finalizado não pode começar novamente.
+        var repeticao = assertThrows(
+            com.bevans.exception.ConflitoOperacionalException.class,
+            () -> execucoes.iniciar(id, uid, "IDA", false)
+        );
+        assertEquals("EXECUCAO_EXISTENTE", repeticao.getCodigo());
+
+        // Outro motorista não acessa o snapshot.
+        assertThrows(
+            AccessDeniedException.class,
+            () -> roteirosExcursao.planejamento(
+                id, outro.getFirebaseUid(), "IDA", false
+            )
+        );
+    }
+
     @Test void inscricaoExcursionistaUsaCredencialPropriaEOuOrganizadorSemAlunoTurma(){
         var dono=usuario("MOTORISTA");long matriculas=vinculos.count();var e=excursoes.criar(dono.getFirebaseUid(),new ExcursaoRequest("Evento","Destino",-8.3,-35.3,"Origem",-8.0,-35.0,clock.instant().plusSeconds(86400),null,12,null));e=excursoes.publicar(e.id(),dono.getFirebaseUid(),e.versao());
         var convite=convites.emitir(e.id(),dono.getFirebaseUid(),clock.instant().plusSeconds(3600));String token=inscricoes.emitirCredencial(convite.token()).token();var i=inscricoes.solicitar(convite.token(),token,new InscricaoExcursaoRequest("Sem celular","contato@test.invalid",null,"Pin",-8.1,-35.1,true,true));inscricoes.confirmar(e.id(),i.id(),dono.getFirebaseUid());
@@ -458,17 +544,33 @@ class OperacaoIntegrationTest {
         assertEquals(1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).stream().filter(n->n.tipo().equals("VIAGEM_CANCELADA")).count());assertNull(gpsViagem.consultar(id,c.aluno().getFirebaseUid()).latitude());
         dispositivos.revogar(c.aluno().getFirebaseUid(),dispositivo.instalacaoId());
     }
+    private void reservarEventoDeTeste(Long esperado) {
+        for (int tentativa = 0; tentativa < 1000; tentativa++) {
+            Long reservado = reservas.reservar();
+
+            assertNotNull(reservado,
+                "Evento de teste não ficou disponível: " + esperado);
+
+            if (esperado.equals(reservado)) return;
+
+            // Consome eventos de outros testes que ficaram na fila H2.
+            notificacoes.distribuir(reservado);
+        }
+
+        fail("Evento não encontrado na fila: " + esperado);
+    }
+
     @Test void filaRecuperaReservaVencidaConsomeUmaVezEInterrompeAposCincoFalhas()throws Exception{
         ((Relogio)clock).agora=clock.instant().plusSeconds(3600);distribuir();var c=cenario();Long id=iniciar(c,"IDA");distribuir();var op=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
         var o=new OutboxNotificacao();o.chave="RECUPERACAO:"+UUID.randomUUID();o.tipo="VIAGEM_INICIADA";o.operacaoId=op.id;o.criadaEm=clock.instant();o.proximaTentativa=clock.instant();o=outbox.saveAndFlush(o);Long evento=o.id;
-        assertEquals(evento,reservas.reservar());((Relogio)clock).agora=clock.instant().plusSeconds(120);assertEquals(evento,reservas.reservar());
+        reservarEventoDeTeste(evento);((Relogio)clock).agora=clock.instant().plusSeconds(120);reservarEventoDeTeste(evento);
         assertEquals(2,outbox.findById(evento).orElseThrow().tentativas);
         long antes=notificacoes.listar(c.aluno().getFirebaseUid(),0,50).getTotalElements();var pool=Executors.newFixedThreadPool(2);
         try{var a=pool.submit(()->notificacoes.distribuir(evento));var b=pool.submit(()->notificacoes.distribuir(evento));a.get(20,TimeUnit.SECONDS);b.get(20,TimeUnit.SECONDS);}finally{pool.shutdownNow();}
         assertEquals(antes+1,notificacoes.listar(c.aluno().getFirebaseUid(),0,50).getTotalElements());assertEquals("PROCESSADA",outbox.findById(evento).orElseThrow().estado);
         var falha=new OutboxNotificacao();falha.chave="FALHA:"+UUID.randomUUID();falha.tipo="VIAGEM_INICIADA";falha.operacaoId=op.id;falha.criadaEm=clock.instant();falha.proximaTentativa=clock.instant();falha=outbox.saveAndFlush(falha);
-        for(int n=1;n<=5;n++){assertEquals(falha.id,reservas.reservar());reservas.falhar(falha.id);var atual=outbox.findById(falha.id).orElseThrow();assertEquals(n,atual.tentativas);((Relogio)clock).agora=atual.proximaTentativa;}
-        assertEquals("FALHA",outbox.findById(falha.id).orElseThrow().estado);assertNull(reservas.reservar());
+        for(int n=1;n<=5;n++){reservarEventoDeTeste(falha.id);reservas.falhar(falha.id);var atual=outbox.findById(falha.id).orElseThrow();assertEquals(n,atual.tentativas);((Relogio)clock).agora=atual.proximaTentativa;}
+        assertEquals("FALHA",outbox.findById(falha.id).orElseThrow().estado);
     }
     @Test void horariosEParadasPublicosNotificamMudancasEfetivas(){
         var c=cenario();var pedido=new RotaPublicaRequest(c.turma().getId(),"Pública","Caruaru",CategoriaRota.OUTROS,ModoRota.FIXA,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),null);

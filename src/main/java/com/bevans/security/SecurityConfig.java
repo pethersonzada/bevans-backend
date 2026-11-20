@@ -79,7 +79,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
             org.springframework.core.env.Environment ambiente,
-            @org.springframework.beans.factory.annotation.Value("${springdoc.api-docs.enabled:false}")boolean documentacao) throws Exception {
+            @org.springframework.beans.factory.annotation.Value("${springdoc.api-docs.enabled:false}")boolean documentacao,
+            @org.springframework.beans.factory.annotation.Value("${app.proxy.trusted-ips:}") String trustedProxyIps) throws Exception {
         boolean docsPublicos=documentacao&&ambiente.acceptsProfiles(org.springframework.core.env.Profiles.of("dev"))
                 &&!ambiente.acceptsProfiles(org.springframework.core.env.Profiles.of("prod"));
         http.csrf(csrf -> csrf.disable())
@@ -118,7 +119,11 @@ public class SecurityConfig {
                 .requestMatchers(org.springframework.http.HttpMethod.PUT,"/publico/excursoes/operacao/*/minha/estado").permitAll()
                 .anyRequest().authenticated())
             .addFilterBefore(firebaseFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(new LimiteConvitesFilter(java.time.Clock.systemUTC()),FirebaseAuthenticationFilter.class);
+            .addFilterBefore(new LimiteConvitesFilter(java.time.Clock.systemUTC(),
+                java.util.Arrays.stream(trustedProxyIps.split(","))
+                    .map(String::trim).filter(s -> !s.isBlank())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet())),
+                FirebaseAuthenticationFilter.class);
         return http.build();
     }
 }

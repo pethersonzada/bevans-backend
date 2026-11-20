@@ -22,6 +22,8 @@ Não inferir aplicação de migrações a partir do número do release ou do Hib
 | 018 | Contato comercial consentido do motorista |
 | 019 | Unicidade de UID Firebase e preflight de duplicidades |
 | 020 | Fila transacional de exclusão de contas |
+| 021 | Snapshot operacional do roteiro completo |
+| 022 | Modalidade explícita das viagens |
 
 Scripts em [migrations](migrations); 001–016 não foram reescritos nesta rodada.
 Verificar também o índice legado em `scripts/sql/001_viagem_ativa_unica.sql`.
@@ -180,3 +182,34 @@ revisão do destino e planejamento de rollback.
 
 O procedimento de permissões não executa migrações
 automaticamente.
+
+## Rate limit público com proxy confiável (#54)
+
+`/publico/excursoes/**` mantém teto global de 600 requisições/min por
+instância. Operações padrão têm 60/min por origem; consultas GET operacionais
+em `/inscricao/**` e `/operacao/**` têm quota independente de 120/min,
+para que polling legítimo não esgote a quota de inscrições. Esses limites
+são por origem e instância, não por credencial; compartilhamento NAT e
+múltiplas instâncias exigem ensaio de carga antes da liberação web pública.
+
+Por padrão, o filtro usa exclusivamente o IP da conexão e ignora
+`X-Real-IP`/`X-Forwarded-For`. Para identificar visitantes distintos atrás
+do Nginx, é possível configurar `app.proxy.trusted-ips` com IPs literais
+exatos dos proxies auditados. Só aceita `X-Real-IP` com um único IPv4/IPv6
+literal válido quando a conexão chega diretamente de um IP dessa lista.
+Cabeçalho ausente, duplicado ou inválido recai no IP da conexão.
+`X-Forwarded-For` nunca é aceito pelo limitador.
+
+**Não ativar a confiança em produção sem revisar Nginx e rede.**
+Pré-requisitos: Nginx deve sobrescrever o cabeçalho com
+`proxy_set_header X-Real-IP $remote_addr;` sem encaminhar valores
+fornecidos pelo visitante; backend interno deve ser inacessível
+externamente; conferir CDN/real_ip, cadeias de proxies, endereços IPv4/IPv6
+reais e eventuais transformações de `getRemoteAddr()` do framework.
+Confiar em localhost quando outros processos locais podem chamar diretamente
+a API permite falsificação de IP pelo localhost.
+
+Ensaiar HTTPS em homologação isolada, com dois clientes de redes diferentes,
+cotas separadas, IP/header falsificado, `429`/`Retry-After`, polling
+e teto global. Revisar também o consumo de SSE e limites de conexões.
+A alteração não muda Nginx, firewall ou configuração em execução.

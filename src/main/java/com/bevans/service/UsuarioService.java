@@ -63,15 +63,25 @@ public class UsuarioService {
             throw new IllegalArgumentException("O novo e-mail não pode estar vazio.");
         }
 
-        if (usuarioRepository.findByEmail(novoEmail).isPresent()) {
+        String email = novoEmail.trim();
+
+        // Serializa alterações da mesma conta e deixa a sincronização repetida
+        // sem gravação quando o perfil já corresponde ao Firebase.
+        Usuario usuario = usuarioRepository.lockById(id)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado no sistema."));
+        if (usuario.getEmail() != null && usuario.getEmail().equalsIgnoreCase(email)) {
+            return usuario;
+        }
+        if (usuarioRepository.findByEmail(email).isPresent()) {
             throw new ConflitoException("Este e-mail já está em uso por outro usuário.");
         }
 
-        Usuario usuario = usuarioRepository.findById(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Usuário não encontrado no sistema."));
-
-        usuario.setEmail(novoEmail.trim());
-        return usuarioRepository.save(usuario);
+        usuario.setEmail(email);
+        try {
+            return usuarioRepository.saveAndFlush(usuario);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            throw new ConflitoException("Este e-mail já está em uso por outro usuário.");
+        }
     }
 
     @Transactional

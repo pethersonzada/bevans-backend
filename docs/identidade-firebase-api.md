@@ -33,3 +33,27 @@ próprios; MOTORISTA mantém o provisionamento existente com segredo do servidor
 Não executar testes com Firebase/contas de produção. Revogação real no provedor
 continua sendo um critério de integração externa; os testes locais verificam
 contrato do SDK, decisão de autorização, concorrência e persistência.
+
+## Atualização de e-mail vinculada à identidade Firebase (#56)
+
+`PUT /usuarios/{id}/email` permanece autenticado e exige que o usuário seja
+dono do perfil. O corpo `{"email":"novo@example.test"}` não constitui prova
+de propriedade do e-mail. O filtro verifica a assinatura e revogação do
+ID token Firebase; o endpoint exige `email_verified=true` e que o e-mail
+reivindicado no token corresponda ao solicitado, ignorando diferenças
+de maiúsculas/minúsculas. Em caso de divergência ou e-mail não verificado:
+**403**, sem alterar PostgreSQL. Corpo vazio: **400**. Token inválido:
+**401**; provedor temporariamente indisponível: **503**.
+
+Fluxo do cliente: alterar e verificar o novo e-mail no Firebase, obter um
+ID token **atualizado com o novo e-mail verificado**, então chamar o
+endpoint com esse e-mail. Tokens antigos com e-mail diferente são rejeitados.
+Repetir a sincronização quando o perfil já coincide é idempotente.
+Alterações concorrentes na mesma conta são serializadas no PostgreSQL.
+Conflitos de unicidade retornam **409**.
+
+A mudança bloqueia alterações arbitrárias apenas por payload, mas a
+verificação com token não é uma leitura em tempo real do registro atual
+no Firebase. Validação com contas reais de homologação, sincronização
+após mudança de e-mail e tratamento de tokens obsoletos no app ainda são
+necessários antes do aceite de produção.

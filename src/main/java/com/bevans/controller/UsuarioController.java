@@ -204,9 +204,24 @@ listarPassageiros() {
     @Operation(summary = "Atualizar E-mail", description = "Atualiza o e-mail do usuário no banco local.")
     @PutMapping("/{id}/email")
     @PreAuthorize("@access.own(#p0)")
-    public ResponseEntity<?> atualizarEmail(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String novoEmail = body.get("email");
-        Usuario usuarioAtualizado = usuarioService.atualizarEmail(id, novoEmail);
+    public ResponseEntity<?> atualizarEmail(@PathVariable Long id,
+            @RequestBody Map<String, String> body, HttpServletRequest request) {
+        String solicitado = body == null ? null : body.get("email");
+        if (solicitado == null || solicitado.isBlank()) {
+            throw new IllegalArgumentException("Informe o novo e-mail.");
+        }
+
+        // O corpo apenas especifica a intenção. A prova de posse é o email
+        // verificado no ID token Firebase, autenticado pelo filtro da API.
+        String emailFirebase = (String) request.getAttribute("firebaseEmail");
+        boolean verificado = Boolean.TRUE.equals(request.getAttribute("firebaseEmailVerified"));
+        if (!verificado || emailFirebase == null
+                || !emailFirebase.equalsIgnoreCase(solicitado.trim())) {
+            throw new AccessDeniedException(
+                    "O novo e-mail deve corresponder ao e-mail verificado no Firebase.");
+        }
+
+        Usuario usuarioAtualizado = usuarioService.atualizarEmail(id, emailFirebase.trim());
         return ResponseEntity.ok(PerfilUsuarioDTO.proprio(usuarioAtualizado));
     }
 

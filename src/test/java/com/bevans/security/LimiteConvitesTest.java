@@ -97,6 +97,43 @@ class LimiteConvitesTest {
         assertEquals(120, chamadas.get());
     }
 
+    @Test void consultaDeInscricaoSemBarraFinalNaoEsgotaQuotaDeEscrita() throws Exception {
+        var filtro = new LimiteConvitesFilter(
+                Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"), ZoneOffset.UTC));
+        var chamadas = new AtomicInteger();
+        for (int i = 0; i < 60; i++) {
+            var r = new MockHttpServletRequest("GET", "/publico/excursoes/inscricao");
+            r.setRemoteAddr("198.51.100.10");
+            filtro.doFilter(r, new MockHttpServletResponse(),
+                    (a, b) -> chamadas.incrementAndGet());
+        }
+        for (int i = 0; i < 60; i++) {
+            var r = new MockHttpServletRequest("POST", "/publico/excursoes/inscricoes");
+            r.setRemoteAddr("198.51.100.10");
+            var s = new MockHttpServletResponse();
+            filtro.doFilter(r, s, (a, b) -> chamadas.incrementAndGet());
+            assertEquals(200, s.getStatus());
+        }
+        assertEquals(120, chamadas.get());
+    }
+
+    @Test void doisCabecalhosXRealIpNaoPermitemTrocarOrigem() throws Exception {
+        var filtro = new LimiteConvitesFilter(
+                Clock.fixed(Instant.parse("2030-01-01T00:00:00Z"), ZoneOffset.UTC),
+                java.util.Set.of("127.0.0.1"));
+        var chamadas = new AtomicInteger();
+        for (int i = 0; i < 61; i++) {
+            var r = new MockHttpServletRequest("GET", "/publico/excursoes/convite");
+            r.setRemoteAddr("127.0.0.1");
+            r.addHeader("X-Real-IP", "198.51.100.10");
+            r.addHeader("X-Real-IP", "198.51.100." + i);
+            var s = new MockHttpServletResponse();
+            filtro.doFilter(r, s, (a, b) -> chamadas.incrementAndGet());
+            if (i == 60) assertEquals(429, s.getStatus());
+        }
+        assertEquals(60, chamadas.get());
+    }
+
     @Test void proxyConfiavelComIpInvalidoFalhaNaConfiguracao() {
         assertThrows(IllegalArgumentException.class, () -> new LimiteConvitesFilter(
                 Clock.systemUTC(), java.util.Set.of("proxy.exemplo.test")));

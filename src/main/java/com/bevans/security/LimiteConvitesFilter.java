@@ -86,7 +86,8 @@ public class LimiteConvitesFilter extends OncePerRequestFilter {
         String uri = request.getRequestURI().substring(request.getContextPath().length());
         // Leituras operacionais não disputam a quota de escrita/convites.
         if ("GET".equals(request.getMethod())
-                && (uri.startsWith("/publico/excursoes/inscricao/")
+                && (uri.equals("/publico/excursoes/inscricao")
+                    || uri.startsWith("/publico/excursoes/inscricao/")
                     || uri.startsWith("/publico/excursoes/operacao/"))) {
             return "CONSULTA";
         }

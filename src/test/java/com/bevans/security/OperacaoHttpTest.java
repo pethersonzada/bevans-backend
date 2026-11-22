@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Import;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-@WebMvcTest(controllers={OperacaoController.class,OperacaoExcursaoPublicoController.class}) @Import({SecurityConfig.class,AccessPolicy.class})
+@WebMvcTest(controllers={OperacaoController.class,OperacaoExcursaoPublicoController.class,ExecucoesInscricaoPublicoController.class}) @Import({SecurityConfig.class,AccessPolicy.class})
 class OperacaoHttpTest extends BaseAutorizacaoHttpTest {
     @MockBean OperacaoService service;
     @Test void roteiroCompletoExigeFirebaseUsaReferenciaENaoPermiteCache() throws Exception {
@@ -32,5 +32,21 @@ class OperacaoHttpTest extends BaseAutorizacaoHttpTest {
     @Test void webUsaSoCredencialIndividualEIdDaExecucao() throws Exception {
         mvc.perform(get("/publico/excursoes/operacao/5/minha").header("X-Inscricao","credencial")).andExpect(status().isOk());
         verify(service).minhaWeb(5L,"credencial");mvc.perform(get("/publico/excursoes/operacao/5/passageiros")).andExpect(status().isUnauthorized());
+    }
+    @Test void inscricaoSoConsultaSuasExecucoesPorCredencialSemCache() throws Exception {
+        when(service.execucoesWeb("credencial")).thenReturn(java.util.List.of(
+                new com.bevans.dto.ExecucaoInscricaoDTO(7L,"IDA",EstadoExecucaoExcursao.EM_ANDAMENTO,
+                        java.time.Instant.parse("2026-11-22T10:00:00Z"))));
+        mvc.perform(get("/publico/excursoes/inscricao/execucoes").header("X-Inscricao","credencial"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(header().string("Referrer-Policy","no-referrer"))
+                .andExpect(header().string("X-Robots-Tag","noindex, nofollow, noarchive"))
+                .andExpect(jsonPath("$[0].id").value(7))
+                .andExpect(jsonPath("$[0].sentido").value("IDA"))
+                .andExpect(jsonPath("$[0].estado").value("EM_ANDAMENTO"))
+                .andExpect(jsonPath("$[0].latitude").doesNotExist())
+                .andExpect(jsonPath("$[0].inscricaoId").doesNotExist());
+        verify(service).execucoesWeb("credencial");
     }
 }

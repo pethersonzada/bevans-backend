@@ -14,5 +14,6 @@ public interface RegistroOperacionalRepository extends JpaRepository<RegistroOpe
     List<RegistroOperacional> findByOperacaoIdOrderByOrdemAscIdAsc(Long id);
     Optional<RegistroOperacional> findByOperacaoIdAndAlunoId(Long id,Long aluno);
     Optional<RegistroOperacional> findByOperacaoIdAndInscricaoId(Long id,Long inscricao);
+    List<RegistroOperacional> findByInscricaoIdOrderByIdAsc(Long inscricao);
     long countByOperacaoIdAndEstado(Long id,EstadoOperacional estado);
 }

@@ -157,6 +157,33 @@ public class OperacaoService {
     }
     @Transactional(readOnly=true) public OperacaoDTO.Registro minha(Long ref,String uid){return dto(proprio(buscar(TipoOperacao.VIAGEM,ref),uid));}
     @Transactional(readOnly=true) public OperacaoDTO.Registro minhaWeb(Long ref,String token){return dto(web(buscar(TipoOperacao.EXCURSAO,ref),token));}
+    /**
+     * Descobre apenas execuções cujo snapshot contém a própria inscrição confirmada.
+     * Não devolve passageiros, paradas, roteiro, coordenadas ou credenciais.
+     */
+    @Transactional(readOnly=true)
+    public List<ExecucaoInscricaoDTO> execucoesWeb(String token){
+        String hash;
+        try{hash=TokensExcursao.hash(token);}catch(IllegalArgumentException ex){throw naoEncontrado();}
+        var credencial=credenciais.findByTokenHash(hash)
+                .filter(c->c.getExpiraEm().isAfter(clock.instant()))
+                .orElseThrow(this::naoEncontrado);
+        var inscricao=inscricoes.findByCredencialId(credencial.getId())
+                .filter(i->i.getEstado()==StatusInscricaoExcursao.CONFIRMADA
+                        &&i.getExcursao().getEstado()!=EstadoExcursao.CANCELADA
+                        &&Objects.equals(i.getExcursao().getId(),credencial.getExcursao().getId()))
+                .orElseThrow(this::naoEncontrado);
+        return registros.findByInscricaoIdOrderByIdAsc(inscricao.getId()).stream()
+                .map(r->r.operacao)
+                .filter(o->o!=null&&o.tipo==TipoOperacao.EXCURSAO&&o.execucao!=null
+                        &&o.execucao.getExcursao()!=null
+                        &&Objects.equals(o.execucao.getExcursao().getId(),credencial.getExcursao().getId()))
+                .map(o->new ExecucaoInscricaoDTO(o.execucao.getId(),o.execucao.getSentido(),
+                        o.execucao.getEstado(),o.execucao.getIniciadaEm()))
+                .distinct()
+                .sorted(Comparator.comparing(ExecucaoInscricaoDTO::id))
+                .toList();
+    }
     @Transactional public OperacaoDTO.Registro alterarDono(TipoOperacao tipo,Long ref,Long registro,String uid,OperacaoDTO.Alteracao d){var o=buscar(tipo,ref);dono(o,uid);lock(o);var r=registros.findById(registro).filter(v->v.operacao.id.equals(o.id)).orElseThrow(this::naoEncontrado);return alterar(o,r,d,"USUARIO:"+usuario(uid).getId(),"MOTORISTA",true);}
     @Transactional public OperacaoDTO.Registro alterarMinha(Long ref,String uid,OperacaoDTO.Alteracao d){var o=buscar(TipoOperacao.VIAGEM,ref);lock(o);var r=proprio(o,uid);return alterar(o,r,d,"USUARIO:"+r.aluno.getId(),"PASSAGEIRO",false);}
     @Transactional public OperacaoDTO.Registro alterarWeb(Long ref,String token,OperacaoDTO.Alteracao d){var o=buscar(TipoOperacao.EXCURSAO,ref);lock(o);var r=web(o,token);return alterar(o,r,d,"INSCRICAO:"+r.inscricao.getId(),"WEB",false);}

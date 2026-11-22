@@ -60,3 +60,18 @@ Migração 014 após 013, FKs/XOR de origem, unicidade por fonte/pessoa e evento
 versão. Locks seguem turma/excursão, os mesmos de início/encerramento e planos.
 Eventos internos pós-alteração têm chave determinística para outbox da #47;
 não fazem envio externo na transação. Não foram usados dados de produção.
+
+## Descoberta de execuções da própria inscrição (Web)
+
+`GET /publico/excursoes/inscricao/execucoes` com `X-Inscricao: <credencial individual>`.
+
+- Retorna somente execuções que contenham um registro operacional criado para **a própria inscrição confirmada**. A lista pode estar vazia se a viagem ainda não começou.
+- Cada item contém apenas `id` (execução), `sentido`, `estado` e `iniciadaEm`. Não devolve participantes, localização, paradas nem roteiro.
+- Credencial inválida, expirada, inscrição não confirmada, cancelada ou excursão cancelada produzem HTTP 404, sem informar se outra inscrição existe.
+- Resposta com `Cache-Control: no-store`, `Referrer-Policy: no-referrer` e `X-Robots-Tag: noindex, nofollow, noarchive`.
+- Após obter um ID autorizado, o participante pode usar `GET /publico/excursoes/operacao/{id}/minha` e `GET .../historico`, sempre reenviando `X-Inscricao`. A autorização é verificada novamente em cada chamada.
+- A credencial não deve ser persistida em URL, cookie, armazenamento local, logs ou monitoramento.
+
+A execução precisa ter produzido seu registro operacional para ser descoberta. Nenhum identificador de execução é enumerado ou inferido.
+
+**Validação de release:** testar em ambiente isolado com duas inscrições, data e sentido distintos, revogação/expiração e resposta a token alheio. Testes unitários ou HTTP simulados não substituem essa homologação.

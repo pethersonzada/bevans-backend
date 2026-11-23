@@ -33,7 +33,7 @@ class UpgradeMainSchemaPostgresIT {
                 assertTrue(scripts.size()>=22,"Migrações de uma versão anterior foram removidas.");
                 for(int i=0;i<scripts.size();i++){
                     String nome=scripts.get(i).getFileName().toString();
-                    assertTrue(nome.matches("\\\\d{3}[-_].+\\\\.sql"),"Nome de migração inválido: "+nome);
+                    assertTrue(nome.length()>8 && nome.substring(0,3).matches("[0-9]{3}") && (nome.charAt(3)=='-' || nome.charAt(3)=='_') && nome.endsWith(".sql"),"Nome de migração inválido: "+nome);
                     assertEquals(i+1,Integer.parseInt(nome.substring(0,3)),"Sequência de migrações interrompida: "+nome);
                 }
                 for(Path script:scripts)ScriptUtils.executeSqlScript(c,new FileSystemResource(script));

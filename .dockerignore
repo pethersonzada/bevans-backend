@@ -1,0 +1,19 @@
+# Nunca incorporar arquivos de credenciais ou configuração local à imagem.
+.git
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+**/*service-account*.json
+**/*firebase*credentials*.json
+**/firebase-service-account.json
+**/serviceAccountKey.json
+**/*.pem
+**/*.p12
+**/*.key
+target
+.idea
+.vscode
+*.log
+*.iml

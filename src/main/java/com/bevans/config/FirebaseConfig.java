@@ -9,6 +9,10 @@ import org.springframework.beans.factory.annotation.Value;
 
 import jakarta.annotation.PostConstruct;
 import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Configuration
 @ConditionalOnProperty(
@@ -21,13 +25,25 @@ public class FirebaseConfig {
     @Value("${app.firebase.credentials-path:/home/ubuntu/firebase-service-account.json}")
     private String credentialsPath;
 
+    // Credencial em variável privada do servidor, sem arquivo no repositório.
+    @Value("${app.firebase.credentials-json:}")
+    private String credentialsJson;
+
+    static InputStream abrirCredencial(String json, String caminho) throws IOException {
+        if (json != null && !json.isBlank()) {
+            return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8));
+        }
+        if (caminho == null || caminho.isBlank()) {
+            throw new IOException("Credencial Firebase Admin não configurada.");
+        }
+        return new FileInputStream(caminho);
+    }
+
     @PostConstruct
     public void initialize() {
         try {
             FirebaseOptions options;
-
-            try (FileInputStream serviceAccount =
-                    new FileInputStream(credentialsPath)) {
+            try (InputStream serviceAccount = abrirCredencial(credentialsJson, credentialsPath)) {
                 options = FirebaseOptions.builder()
                         .setCredentials(GoogleCredentials.fromStream(serviceAccount))
                         .build();
@@ -37,7 +53,8 @@ public class FirebaseConfig {
                 FirebaseApp.initializeApp(options);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao inicializar o Firebase: " + e.getMessage(), e);
+            // Não incluir conteúdo, caminho de segredo ou JSON na mensagem de falha.
+            throw new IllegalStateException("Falha ao inicializar Firebase Admin.", e);
         }
     }
 }

@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -27,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Configurar Java 21
         uses: actions/setup-java@v4
@@ -37,6 +42,13 @@ jobs:
 
       - name: Executar testes
         run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Guardar XML da suíte de API simulada
+        run: |
+          mkdir -p "$RUNNER_TEMP/bevans-api-testes"
+          cp target/surefire-reports/TEST-*.xml "$RUNNER_TEMP/bevans-api-testes/"
+      - name: Testar integridade do gerador de evidências
+        run: python3 -m unittest discover -s scripts/ci -p 'test_gerar_evidencias.py'
 
       - name: Preparar schemas PostgreSQL isolados
         env:
@@ -57,3 +69,18 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: local-test-only
         run: bash scripts/test-db-permissions.sh
+
+      - name: Registrar evidências do PostgreSQL descartável
+        run: |
+          python3 scripts/ci/gerar_evidencias.py \
+            --api-dir "$RUNNER_TEMP/bevans-api-testes" \
+            --postgres-dir target/surefire-reports \
+            --output "$RUNNER_TEMP/bevans-evidencias/resultado.json"
+
+      - name: Anexar apenas o resumo sem dados de usuários
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencias-backend-postgresql-descartavel
+          path: ${{ runner.temp }}/bevans-evidencias/resultado.json
+          if-no-files-found: error
+          retention-days: 14

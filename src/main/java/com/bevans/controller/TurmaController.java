@@ -300,7 +300,7 @@ public class TurmaController {
 
     @Operation(summary = "Solicitar Entrada na Turma")
     @PostMapping("/entrar/{alunoId}")
-    @PreAuthorize("@access.own(#p0)")
+    @PreAuthorize("@access.isPassageiro() and @access.own(#p0)")
     public ResponseEntity<String> solicitarEntradaTurma(
             @PathVariable Long alunoId,
             @RequestParam String codigo

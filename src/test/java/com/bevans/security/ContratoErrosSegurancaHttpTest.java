@@ -24,6 +24,7 @@ class ContratoErrosSegurancaHttpTest extends BaseAutorizacaoHttpTest {
             .andExpect(jsonPath("$.timestamp").exists())
             .andExpect(jsonPath("$.status").value(codigo))
             .andExpect(jsonPath("$.erro").isString())
+            .andExpect(jsonPath("$.mensagem").isString())
             .andExpect(jsonPath("$.caminho")
                     .value("/turmas/13/passageiros"));
     }

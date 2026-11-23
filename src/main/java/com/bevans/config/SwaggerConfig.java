@@ -40,7 +40,10 @@ public class SwaggerConfig {
     @Bean public OpenApiCustomizer contratosGerados(){return api->{
         Schema<Object> erro=new Schema<>();erro.setType("object");
         erro.addProperty("timestamp",new StringSchema().description("Data/hora local ISO, sem offset"));erro.addProperty("status",new IntegerSchema());
-        erro.addProperty("erro",new StringSchema());erro.addProperty("caminho",new StringSchema());erro.setRequired(List.of("timestamp","status","erro","caminho"));
+        erro.addProperty("erro",new StringSchema());
+        erro.addProperty("mensagem",new StringSchema().description("Mesmo texto de erro exibido pelo painel web"));
+        erro.addProperty("caminho",new StringSchema());
+        erro.setRequired(List.of("timestamp","status","erro","mensagem","caminho"));
         api.getComponents().addSchemas("ErroAPI",erro);
         api.getPaths().forEach((path,item)->item.readOperationsMap().forEach((metodo,op)->{
             if(op.getParameters()!=null)for(var parametro:op.getParameters()){
@@ -58,7 +61,7 @@ public class SwaggerConfig {
                 for(var codigo:Map.of("400","Entrada inválida","401","Firebase ausente/inválido/expirado","403","Papel/permissão negados","404","Recurso ou credencial não encontrado/indisponível","409","Conflito de versão, capacidade ou estado","410","Endpoint legado desativado","429","Limite de frequência/conexões","500","Erro interno sem detalhes sensíveis","503","Serviço ou otimização indisponível").entrySet()){
                     op.getResponses().addApiResponse(codigo.getKey(),new ApiResponse().description(codigo.getValue())
                         .content(new Content().addMediaType("application/json",new MediaType().schema(new Schema<>().$ref("#/components/schemas/ErroAPI"))
-                            .example(Map.of("timestamp","2026-11-14T12:00:00","status",Integer.parseInt(codigo.getKey()),"erro",codigo.getValue(),"caminho",path)))));
+                            .example(Map.of("timestamp","2026-11-14T12:00:00","status",Integer.parseInt(codigo.getKey()),"erro",codigo.getValue(),"mensagem",codigo.getValue(),"caminho",path)))));
                 }
                 if(path.endsWith("/localizacao/eventos")){
                     String idCampo=path.startsWith("/viagens/")?"viagemId":"execucaoId";

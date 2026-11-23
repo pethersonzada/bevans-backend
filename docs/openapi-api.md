@@ -48,8 +48,8 @@ Não supor que são intercambiáveis. Contratos Markdown detalham limites adicio
 
 Respostas reais de convites 201 e favoritos/cancelamento de solicitação 204
 estão anotadas; demais métodos preservam seus códigos reais. Erros comuns são
-documentados no schema `ErroAPI`: timestamp ISO local, status numérico, erro e
-caminho. Códigos aplicam-se conforme a operação; não implicam que toda operação
+documentados no schema `ErroAPI` com timestamp ISO local, status numérico, caminho
+e o mesmo texto em `erro` e `mensagem`. O painel web lê `mensagem`. Códigos aplicam-se conforme a operação; não implicam que toda operação
 produza todos eles. Localização legada foi marcada deprecated/410.
 
 SSE usa `text/event-stream`: evento localizacao, reconexão sugerida em 10 segundos,

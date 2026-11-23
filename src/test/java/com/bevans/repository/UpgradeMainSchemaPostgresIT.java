@@ -48,6 +48,16 @@ class UpgradeMainSchemaPostgresIT {
                 s.executeUpdate(inserir.formatted(88));assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(inserir.formatted(89))).getSQLState());
                 s.executeUpdate("update inscricoes_excursao set estado='CANCELADA' where excursao_id=99");assertEquals(1,s.executeUpdate(inserir.formatted(89)));
                 assertEquals("23514",assertThrows(SQLException.class,()->s.executeUpdate("update inscricoes_excursao set latitude=91 where excursao_id=99")).getSQLState());
+                try(var rs=s.executeQuery("select count(*) from inscricoes_excursao where excursao_id=99 and passageiro_id is null")){
+                    assertTrue(rs.next());
+                    assertEquals(2,rs.getLong(1));
+                }
+                assertEquals("23503",assertThrows(SQLException.class,()->s.executeUpdate(
+                    "update inscricoes_excursao set passageiro_id=999999 where excursao_id=99"
+                )).getSQLState());
+                assertEquals(2,s.executeUpdate(
+                    "update inscricoes_excursao set passageiro_id=1 where excursao_id=99"
+                ));
                 String execucao="insert into execucoes_excursao(excursao_id,sentido,estado,iniciada_em,roteiro_json) values(99,'%s','EM_ANDAMENTO',CURRENT_TIMESTAMP,'[]')";
                 s.executeUpdate(execucao.formatted("IDA"));assertEquals("23505",assertThrows(SQLException.class,()->s.executeUpdate(execucao.formatted("VOLTA"))).getSQLState());
                 s.executeUpdate("update execucoes_excursao set estado='FINALIZADA' where excursao_id=99");assertEquals(1,s.executeUpdate(execucao.formatted("VOLTA")));

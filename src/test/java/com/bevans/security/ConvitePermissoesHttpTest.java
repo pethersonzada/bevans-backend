@@ -39,6 +39,15 @@ class ConvitePermissoesHttpTest extends BaseAutorizacaoHttpTest {
         }
         verify(turmaService).solicitarEntradaPorCodigo(2L, "ABC123");
     }
+    @Test void motoristaNaoPodeSolicitarEntradaComoPassageiro() throws Exception {
+        identidade("motor-1", usuario(1, "MOTORISTA"));
+        try (var ignored = firebase("valido", "motor-1")) {
+            mvc.perform(post("/turmas/entrar/1").param("codigo", "ABC123")
+                .header("Authorization", "Bearer valido"))
+                .andExpect(status().isForbidden());
+        }
+        verifyNoInteractions(turmaService);
+    }
     @Test void passageiroNaoPodeAnalisarSolicitacao() throws Exception {
         identidade("pass-2", usuario(2, "PASSAGEIRO"));
         try (var ignored = firebase("valido", "pass-2")) {

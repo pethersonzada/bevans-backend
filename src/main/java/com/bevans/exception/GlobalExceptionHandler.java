@@ -38,6 +38,7 @@ public class GlobalExceptionHandler {
         body.put("timestamp", LocalDateTime.now());
         body.put("status", status.value());
         body.put("erro", mensagem);
+        body.put("mensagem", mensagem);
         body.put(
                 "caminho",
                 request.getDescription(false).replace("uri=", "")

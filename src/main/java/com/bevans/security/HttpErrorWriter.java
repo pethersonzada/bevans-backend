@@ -28,6 +28,7 @@ public final class HttpErrorWriter {
         body.put("timestamp", LocalDateTime.now().toString());
         body.put("status", status);
         body.put("erro", mensagem);
+        body.put("mensagem", mensagem);
         body.put("caminho", request.getRequestURI());
 
         response.setStatus(status);

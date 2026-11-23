@@ -2,6 +2,8 @@ package com.bevans.security;
 import com.bevans.controller.AuthController;
 import com.google.firebase.auth.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import java.util.*;
@@ -11,6 +13,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(AuthController.class) @Import({SecurityConfig.class,AccessPolicy.class,com.bevans.service.AutenticacaoPerfilService.class})
 class IdentidadeLegadaHttpTest extends BaseAutorizacaoHttpTest {
     @org.springframework.boot.test.mock.mockito.MockBean jakarta.persistence.EntityManager em;
+    @ParameterizedTest
+    @CsvSource({
+        "CERTIFICATE_FETCH_FAILED, UNKNOWN, 503",
+        "EXPIRED_ID_TOKEN, INVALID_ARGUMENT, 401",
+        "REVOKED_ID_TOKEN, INVALID_ARGUMENT, 401"
+    })
+    void falhaNaVerificacaoInterrompeLogin(AuthErrorCode motivo,
+            com.google.firebase.ErrorCode codigo, int esperado) throws Exception {
+        FirebaseAuth auth = mock(FirebaseAuth.class);
+        FirebaseAuthException erro = mock(FirebaseAuthException.class);
+        when(erro.getErrorCode()).thenReturn(codigo);
+        when(erro.getAuthErrorCode()).thenReturn(motivo);
+        when(auth.verifyIdToken("teste", true)).thenThrow(erro);
+        try (var scope = mockStatic(FirebaseAuth.class)) {
+            scope.when(FirebaseAuth::getInstance).thenReturn(auth);
+            mvc.perform(post("/auth/login").header("Authorization", "Bearer teste")
+                    .contentType("application/json").content("{}"))
+                .andExpect(status().is(esperado));
+        }
+        verifyNoInteractions(usuarios);
+    }
     @Test void emailNaoVerificadoNaoApropriaPerfilLegado()throws Exception{
         var legado=usuario(10,"MOTORISTA");legado.setEmail("legado@test.invalid");when(usuarios.findByEmail(legado.getEmail())).thenReturn(Optional.of(legado));
         var auth=mock(FirebaseAuth.class);var token=mock(FirebaseToken.class);when(token.getUid()).thenReturn("outra-identidade");when(token.getEmail()).thenReturn(legado.getEmail());when(token.getClaims()).thenReturn(Map.of("email_verified",false));when(auth.verifyIdToken("teste",true)).thenReturn(token);

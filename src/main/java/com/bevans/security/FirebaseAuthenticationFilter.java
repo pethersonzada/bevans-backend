@@ -1,6 +1,9 @@
 package com.bevans.security;
 
+import com.google.firebase.ErrorCode;
+import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -53,11 +56,16 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                 Object exp=token.getClaims().get("exp");
                 if(exp instanceof Number n)request.setAttribute("firebaseExpiresAt",java.time.Instant.ofEpochSecond(n.longValue()));
 
-            } catch (com.google.firebase.auth.FirebaseAuthException e) {
+            } catch (FirebaseAuthException e) {
                 SecurityContextHolder.clearContext();
-                if(e.getErrorCode()==com.google.firebase.ErrorCode.UNAVAILABLE||e.getErrorCode()==com.google.firebase.ErrorCode.INTERNAL||e.getErrorCode()==com.google.firebase.ErrorCode.DEADLINE_EXCEEDED||e.getErrorCode()==com.google.firebase.ErrorCode.RESOURCE_EXHAUSTED)
-                    HttpErrorWriter.write(request,response,503,"Autenticação temporariamente indisponível; tente novamente.");
-                else unauthorized(request,response);
+                ErrorCode code = e.getErrorCode();
+                if (e.getAuthErrorCode() == AuthErrorCode.CERTIFICATE_FETCH_FAILED
+                        || code == ErrorCode.UNAVAILABLE || code == ErrorCode.INTERNAL
+                        || code == ErrorCode.DEADLINE_EXCEEDED || code == ErrorCode.RESOURCE_EXHAUSTED) {
+                    HttpErrorWriter.write(request, response, 503, "Autenticação temporariamente indisponível; tente novamente.");
+                } else {
+                    unauthorized(request, response);
+                }
                 return;
             } catch (Exception e) {
                 SecurityContextHolder.clearContext();

@@ -7,6 +7,9 @@ public class InscricaoExcursao {
     @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
     @ManyToOne(optional=false) @JoinColumn(name="excursao_id",nullable=false) private Excursao excursao;
     @OneToOne(optional=false) @JoinColumn(name="credencial_id",nullable=false,unique=true) private CredencialInscricaoExcursao credencial;
+    @ManyToOne(fetch=FetchType.LAZY)
+    @JoinColumn(name="passageiro_id")
+    private Usuario passageiro;
     @Column(nullable=false,length=120) private String nome;
     @Column(nullable=false,length=150) private String contato;
     @Column(nullable=false,length=64) private String participanteHash;
@@ -18,6 +21,8 @@ public class InscricaoExcursao {
     @Column(nullable=false) private Instant reservaValidaAte;
     @Column(nullable=false) private Instant consentimentoEm;
     private Instant confirmadaEm;
+    public Usuario getPassageiro(){return passageiro;}
+    public void vincularPassageiro(Usuario usuario){this.passageiro=usuario;}
     public Long getId(){return id;}public Excursao getExcursao(){return excursao;}public String getNome(){return nome;}public String getContato(){return contato;}
     public String getParticipanteHash(){return participanteHash;}public ParadaExcursao getParada(){return parada;}
     public String getNomePonto(){return nomePonto;}public double getLatitude(){return latitude;}public double getLongitude(){return longitude;}

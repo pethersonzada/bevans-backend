@@ -7,6 +7,18 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 public interface InscricaoExcursaoRepository extends JpaRepository<InscricaoExcursao,Long>{
     Optional<InscricaoExcursao> findByCredencialId(Long id);
+
+    @org.springframework.data.jpa.repository.Lock(
+        jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select i from InscricaoExcursao i where i.credencial.id=:credencialId")
+    Optional<InscricaoExcursao> lockByCredencialId(
+        @Param("credencialId") Long credencialId);
+
+    Page<InscricaoExcursao> findByPassageiroId(
+        Long passageiroId, Pageable pagina);
+
+    Optional<InscricaoExcursao> findByIdAndPassageiroId(
+        Long id, Long passageiroId);
     List<InscricaoExcursao> findByExcursaoIdAndParticipanteHashAndEstadoIn(Long id,String hash,List<StatusInscricaoExcursao> estados);
     Page<InscricaoExcursao> findByExcursaoId(Long id,Pageable pagina);
     List<InscricaoExcursao> findByExcursaoIdAndEstadoOrderByIdAsc(Long id,StatusInscricaoExcursao estado);

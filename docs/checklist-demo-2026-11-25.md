@@ -44,8 +44,8 @@ curl.exe -i "$api/notificacoes" -H "Origin: $origem"
 
 ## Evidências e pendências do ensaio
 
-- Em 23/11, Java 21.0.12.1 e Maven Wrapper 3.9.14 executaram `clean verify` com **397 testes** e geração do JAR. A suíte usa H2, MockMvc e autenticação simulada. O teste `TurmaPainelIntegrationTest` atravessa filtro, controllers, serviços e persistência com duas identidades.
-- O perfil `-Ppostgres-validation verify` executou **143 testes** em PostgreSQL 16.4 descartável, em loopback, incluindo migrações. As duas suítes terminaram sem falhas, erros ou testes ignorados.
+- Em 23/11, Java 21.0.12.1 e Maven Wrapper 3.9.14 executaram `clean verify` com **398 testes** e geração do JAR. A suíte usa H2, MockMvc e autenticação simulada. Uma regressão cobre a troca do convite enquanto o ingresso aguarda o bloqueio da turma. Nesse caso, o passageiro deve usar o novo código.
+- O perfil `-Ppostgres-validation verify` executou **144 testes** em PostgreSQL 16.4 descartável. O teste `TurmaPainelPostgresIT` executou criação, ingresso, conflito de duplicidade, aprovação e consulta pelos dois perfis no schema migrado com Hibernate em `validate`. As duas suítes terminaram sem falhas, erros ou testes ignorados.
 - Os sete testes Python do gerador de evidências do CI passaram com `py -3 -m unittest discover -s scripts/ci -p test_gerar_evidencias.py`.
 - Na API publicada configurada no webapp, a consulta de saúde retornou `OK`. O preflight de `POST /turmas` respondeu 200 para `https://bevans-webapp.vercel.app`, com `authorization, content-type`. A consulta anônima de notificações retornou 401. Foram feitas apenas leituras e preflight.
 - [ ] Validar no Preview escolhido o login real, F5, troca de conta, CORS da API de homologação e as gravações do roteiro. GPS, mapas e entrega de push dependem de serviços ou dispositivos externos. Registrar quais foram ensaiados antes de incluí-los na apresentação.

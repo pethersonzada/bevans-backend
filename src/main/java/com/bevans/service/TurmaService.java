@@ -427,10 +427,9 @@ public class TurmaService {
             );
         }
 
+        String codigoSolicitado = codigo.trim().toUpperCase(java.util.Locale.ROOT);
         Turma turma = turmaRepository
-                .findByCodigoConvite(
-                        codigo.trim().toUpperCase()
-                )
+                .findByCodigoConvite(codigoSolicitado)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "Código de convite inválido."
@@ -447,6 +446,11 @@ public class TurmaService {
 
         turma = turmaRepository.lockById(turma.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Turma não encontrada."));
+        // A regeneração pode ter terminado enquanto a solicitação aguardava o lock.
+        entityManager.refresh(turma, LockModeType.PESSIMISTIC_WRITE);
+        if (!codigoSolicitado.equals(turma.getCodigoConvite())) {
+            throw new IllegalArgumentException("Código de convite inválido.");
+        }
 
         if (!"PASSAGEIRO".equals(aluno.getTipo())) {
             throw new IllegalArgumentException(

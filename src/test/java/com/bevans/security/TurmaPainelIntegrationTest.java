@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
     "spring.jpa.hibernate.ddl-auto=create-drop", "spring.sql.init.mode=never"
 })
 @AutoConfigureMockMvc
-class TurmaPainelIntegrationTest {
+public class TurmaPainelIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired UsuarioRepository usuarios;
@@ -49,7 +49,7 @@ class TurmaPainelIntegrationTest {
     }
 
     @Test
-    void conviteDoPainelSoVinculaPassageiroAposAprovacao() throws Exception {
+    protected void conviteDoPainelSoVinculaPassageiroAposAprovacao() throws Exception {
         FirebaseAuth auth = mock(FirebaseAuth.class);
         Usuario motorista = cadastrar(auth, "motorista", "MOTORISTA");
         Usuario passageiro = cadastrar(auth, "passageiro", "PASSAGEIRO");

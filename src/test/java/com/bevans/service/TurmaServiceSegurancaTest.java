@@ -37,6 +37,7 @@ class TurmaServiceSegurancaTest {
     private void prepararConvite(Usuario usuario) {
         Turma turma = new Turma();
         turma.setId(13L);
+        turma.setCodigoConvite("ABC123");
         when(turmas.findByCodigoConvite("ABC123")).thenReturn(Optional.of(turma));
         when(turmas.lockById(13L)).thenReturn(Optional.of(turma));
         when(usuarios.findById(usuario.getId())).thenReturn(Optional.of(usuario));
@@ -69,6 +70,21 @@ class TurmaServiceSegurancaTest {
         verify(vinculos).save(argThat(v -> "PENDENTE".equals(v.getStatus())
                 && v.getAluno() == passageiro
                 && v.getTurma().getId().equals(13L)));
+    }
+
+    @Test
+    void conviteSubstituidoAntesDoLockNaoCriaPedido() {
+        Usuario passageiro = new Usuario();
+        passageiro.setId(2L);
+        passageiro.setTipo("PASSAGEIRO");
+        prepararConvite(passageiro);
+        Turma atual = new Turma();
+        atual.setId(13L);
+        atual.setCodigoConvite("NOVO12");
+        when(turmas.lockById(13L)).thenReturn(Optional.of(atual));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.solicitarEntradaPorCodigo(2L, "ABC123"));
+        verifyNoInteractions(vinculos);
     }
 
     @Test

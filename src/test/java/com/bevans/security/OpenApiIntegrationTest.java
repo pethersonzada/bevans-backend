@@ -26,6 +26,7 @@ class OpenApiIntegrationTest {
         assertTrue(paths.path("/viagens/{id}/localizacao/eventos").path("get").path("responses").path("200").path("content").has("text/event-stream"));
         assertFalse(api.at("/components/schemas/Usuario/properties").has("telefone"));assertTrue(api.at("/components/schemas/PerfilUsuarioDTO/properties").has("telefone"));assertTrue(api.at("/components/schemas/ErroAPI/properties").has("erro"));
         assertTrue(paths.path("/notificacoes").path("get").path("parameters").toString().contains("pagina"));
+        assertTrue(api.at("/components/schemas/ErroAPI/properties").has("mensagem"));
         assertTrue(api.at("/components/schemas/CadastroUsuario/properties").has("firebaseUid"));assertTrue(api.at("/components/schemas/CadastroUsuario/properties").has("codigoAcesso"));
         assertTrue(api.at("/components/schemas/ParadaPrivadaEntrada/properties").has("pontoConfirmado"));assertFalse(api.at("/components/schemas/ParadaPrivadaSaida/properties").has("pontoConfirmado"));assertTrue(api.at("/components/schemas/ParadaPrivadaSaida/properties").has("ordem"));
         assertTrue(api.at("/components/schemas/EventoOperacional/properties").has("anterior"));assertTrue(api.at("/components/schemas/EventoResponsabilidade/properties").has("termoVersao"));verificarReferencias(api,api);

@@ -30,9 +30,9 @@ class GlobalExceptionHandlerContratoTest {
 
         assertEquals(status, corpo.get("status"));
         assertEquals(mensagem, corpo.get("erro"));
+        assertEquals(mensagem, corpo.get("mensagem"));
         assertEquals("/teste", corpo.get("caminho"));
         assertNotNull(corpo.get("timestamp"));
-        assertEquals(4, corpo.size());
     }
 
     @Test

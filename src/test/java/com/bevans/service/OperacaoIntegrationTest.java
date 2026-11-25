@@ -52,6 +52,15 @@ class OperacaoIntegrationTest {
         var e=new Endereco();e.setUsuario(a);e.setLatitude(-8.1);e.setLongitude(-35.1);e=enderecos.save(e);var f=new Endereco();f.setUsuario(a);f.setLatitude(-8.2);f.setLongitude(-35.2);f=enderecos.save(f);
         var p=new Presenca();p.setTurma(t);p.setUsuario(a);p.setData(LocalDate.now(clock));p.setStatus("AMBOS");p.setEnderecoIda(e);p.setEnderecoVolta(f);presencas.save(p);return new Cenario(t,d,a);
     }
+    private Usuario passageiroAdicional(Cenario c,double latitude){
+        var a=usuario("PASSAGEIRO");
+        var v=new AlunoTurma();v.setTurma(c.turma());v.setAluno(a);v.setStatus("APROVADO");vinculos.save(v);
+        var ida=new Endereco();ida.setUsuario(a);ida.setLatitude(latitude);ida.setLongitude(-35.1);ida=enderecos.save(ida);
+        var volta=new Endereco();volta.setUsuario(a);volta.setLatitude(latitude-0.01);volta.setLongitude(-35.2);volta=enderecos.save(volta);
+        var p=new Presenca();p.setTurma(c.turma());p.setUsuario(a);p.setData(LocalDate.now(clock));p.setStatus("AMBOS");
+        p.setEnderecoIda(ida);p.setEnderecoVolta(volta);presencas.save(p);
+        return a;
+    }
     private Long iniciar(Cenario c,String s){viagens.iniciarRota(c.turma().getId(),s);var v=viagemRepo.findFirstByTurmaIdAndStatus(c.turma().getId(),"EM_ANDAMENTO").orElseThrow();assertEquals(clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),v.getIniciadaEm());return v.getId();}
     private Long iniciarPublica(Cenario c,String sentido,Long rotaId){
         viagens.iniciarRota(c.turma().getId(),sentido,"PUBLICA",rotaId);
@@ -379,6 +388,56 @@ class OperacaoIntegrationTest {
             assertEquals(1,service.painel(TipoOperacao.VIAGEM,id,c.dono().getFirebaseUid()).contadores().naVan());assertEquals(1,service.historicoMeu(id,c.aluno().getFirebaseUid()).size());
         }finally{inicio.countDown();pool.shutdownNow();}
     }
+    @Test void posicaoIndividualContaParadasDistintasEAvancaSomenteComConfirmacao(){
+        var c=cenario();
+        passageiroAdicional(c,-8.11);
+        passageiroAdicional(c,-8.12);
+        Long id=iniciar(c,"IDA");
+        var operacao=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
+        var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(operacao.id);
+        assertEquals(3,rs.size());
+
+        // Representa uma parada inicial e dois passageiros na mesma parada seguinte.
+        var primeiro=rs.get(0);var segundo=rs.get(1);var terceiro=rs.get(2);
+        primeiro.ordem=1;segundo.ordem=2;terceiro.ordem=2;
+        registros.saveAllAndFlush(rs);
+        String uidPrimeiro=primeiro.aluno.getFirebaseUid();
+        String uidSegundo=segundo.aluno.getFirebaseUid();
+        String uidTerceiro=terceiro.aluno.getFirebaseUid();
+
+        var p1=service.posicaoMinha(id,uidPrimeiro);
+        var p2=service.posicaoMinha(id,uidSegundo);
+        var p3=service.posicaoMinha(id,uidTerceiro);
+        assertEquals(Long.valueOf(0),p1.paradasAntes());assertTrue(p1.proximo());
+        assertEquals(Long.valueOf(1),p2.paradasAntes());assertFalse(p2.proximo());
+        assertEquals(Long.valueOf(1),p3.paradasAntes());assertFalse(p3.proximo());
+        assertEquals(id,p2.viagemId());assertEquals(EstadoOperacional.AGUARDANDO,p2.estado());
+        assertThrows(AccessDeniedException.class,()->service.posicaoMinha(id,usuario("PASSAGEIRO").getFirebaseUid()));
+        assertThrows(AccessDeniedException.class,()->service.posicaoMinha(id,c.dono().getFirebaseUid()));
+
+        var antes=service.minha(id,uidPrimeiro);
+        service.alterarMinha(id,uidPrimeiro,estado(EstadoOperacional.NAO_EMBARCOU,antes.versao()));
+        assertEquals(Long.valueOf(0),service.posicaoMinha(id,uidSegundo).paradasAntes());
+        assertTrue(service.posicaoMinha(id,uidTerceiro).proximo());
+        assertNull(service.posicaoMinha(id,uidPrimeiro).paradasAntes());
+        assertFalse(service.posicaoMinha(id,uidPrimeiro).proximo());
+
+        var registrado=service.minha(id,uidTerceiro);
+        service.alterarMinha(id,uidTerceiro,estado(EstadoOperacional.EMBARCADO,registrado.versao()));
+        assertEquals(EstadoOperacional.EMBARCADO,service.posicaoMinha(id,uidTerceiro).estado());
+        assertNull(service.posicaoMinha(id,uidTerceiro).paradasAntes());
+
+        registrado=service.minha(id,uidTerceiro);
+        service.alterarMinha(id,uidTerceiro,estado(EstadoOperacional.DESEMBARCADO,registrado.versao()));
+        viagens.encerrarRota(c.turma().getId());
+        assertFalse(service.posicaoMinha(id,uidSegundo).proximo());
+        assertNull(service.posicaoMinha(id,uidSegundo).paradasAntes());
+        Long nova=iniciar(c,"VOLTA");
+        assertNotEquals(id,nova);
+        assertFalse(service.posicaoMinha(id,uidSegundo).proximo());
+        assertEquals(EstadoOperacional.AGUARDANDO,service.posicaoMinha(nova,uidSegundo).estado());
+    }
+
     @Test void isolamentoDeTurmasViagensESentidosEContadoresPersistidos(){
         var c=cenario();var outra=cenario();Long id=iniciar(c,"IDA"),alheia=iniciar(outra,"IDA");var r=service.minha(id,c.aluno().getFirebaseUid());
         assertThrows(AccessDeniedException.class,()->service.minha(id,outra.aluno().getFirebaseUid()));assertThrows(AccessDeniedException.class,()->service.painel(TipoOperacao.VIAGEM,id,outra.dono().getFirebaseUid()));

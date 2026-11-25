@@ -16,4 +16,9 @@ public interface RegistroOperacionalRepository extends JpaRepository<RegistroOpe
     Optional<RegistroOperacional> findByOperacaoIdAndInscricaoId(Long id,Long inscricao);
     List<RegistroOperacional> findByInscricaoIdOrderByIdAsc(Long inscricao);
     long countByOperacaoIdAndEstado(Long id,EstadoOperacional estado);
+    /** Conta pontos de embarque distintos, sem devolver outros passageiros ao cliente. */
+    @org.springframework.data.jpa.repository.Query("select count(distinct r.ordem) from RegistroOperacional r where r.operacao.id = :operacao and r.estado = :estado and r.ordem < :ordem")
+    long contarParadasPendentesAntes(@org.springframework.data.repository.query.Param("operacao") Long operacao,
+            @org.springframework.data.repository.query.Param("estado") EstadoOperacional estado,
+            @org.springframework.data.repository.query.Param("ordem") int ordem);
 }

@@ -29,6 +29,26 @@ class OperacaoHttpTest extends BaseAutorizacaoHttpTest {
                     .andExpect(status().isOk());
         }verify(service).alterarMinha(eq(1L),eq("aluno"),argThat(d->d.estado()==EstadoOperacional.EMBARCADO));
     }
+    @Test void posicaoIndividualExigeFirebaseENaoExpoeOutrosPassageiros() throws Exception {
+        mvc.perform(get("/operacoes/VIAGEM/5/minha/posicao")).andExpect(status().isUnauthorized());
+        when(service.posicaoMinha(5L,"aluno"))
+            .thenReturn(new com.bevans.dto.PosicaoEmbarqueDTO(5L,EstadoOperacional.AGUARDANDO,2,1L,false));
+        try(var ignored=firebase("valido","aluno")){
+            mvc.perform(get("/operacoes/VIAGEM/5/minha/posicao").header("Authorization","Bearer valido"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(jsonPath("$.viagemId").value(5))
+                .andExpect(jsonPath("$.estado").value("AGUARDANDO"))
+                .andExpect(jsonPath("$.ordem").value(2))
+                .andExpect(jsonPath("$.paradasAntes").value(1))
+                .andExpect(jsonPath("$.proximo").value(false))
+                .andExpect(jsonPath("$.registros").doesNotExist())
+                .andExpect(jsonPath("$.nome").doesNotExist())
+                .andExpect(jsonPath("$.latitude").doesNotExist())
+                .andExpect(jsonPath("$.alunoId").doesNotExist());
+        }
+        verify(service).posicaoMinha(5L,"aluno");
+    }
     @Test void webUsaSoCredencialIndividualEIdDaExecucao() throws Exception {
         mvc.perform(get("/publico/excursoes/operacao/5/minha").header("X-Inscricao","credencial")).andExpect(status().isOk());
         verify(service).minhaWeb(5L,"credencial");mvc.perform(get("/publico/excursoes/operacao/5/passageiros")).andExpect(status().isUnauthorized());

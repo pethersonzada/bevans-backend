@@ -75,3 +75,20 @@ não fazem envio externo na transação. Não foram usados dados de produção.
 A execução precisa ter produzido seu registro operacional para ser descoberta. Nenhum identificador de execução é enumerado ou inferido.
 
 **Validação de release:** testar em ambiente isolado com duas inscrições, data e sentido distintos, revogação/expiração e resposta a token alheio. Testes unitários ou HTTP simulados não substituem essa homologação.
+
+## Posição individual na fila da viagem
+
+`GET /operacoes/VIAGEM/{viagemId}/minha/posicao`, autenticado com Firebase, devolve **somente** o registro e o progresso do passageiro vinculado e incluído no snapshot dessa viagem:
+
+```json
+{"viagemId":42,"estado":"AGUARDANDO","ordem":2,"paradasAntes":1,"proximo":false}
+```
+
+- `paradasAntes` conta **pontos de embarque distintos com pelo menos um passageiro ainda em AGUARDANDO**, de ordem operacional menor que a do solicitante. Dois participantes na mesma parada não duplicam a contagem.
+- `proximo=true` somente quando a viagem está ativa, o próprio estado é `AGUARDANDO` e não há paradas pendentes anteriores.
+- Se o passageiro já embarcou, não embarcou, desembarcou ou a viagem foi encerrada, `paradasAntes=null` e `proximo=false`. Não apresentar estimativas falsas.
+- `ordem` é a posição ordinal do ponto do próprio passageiro no snapshot, **não** é um número de passageiros nem prova de proximidade GPS.
+- Confirmações e correções operacionais alteram o contador na consulta seguinte. Não há inferência baseada em GPS.
+- Acesso de pessoa não autorizada é rejeitado; outros registros, nomes, coordenadas e totais de terceiros não são retornados. Resposta com `Cache-Control: no-store`.
+- Não substitui o endpoint `/minha`, que preserva seu contrato atual. O Android deve consultar essa rota enquanto houver viagem ativa, usar `proximo` e `paradasAntes` apenas quando disponíveis, e indicar indisponibilidade em caso de erro ou estado antigo.
+- Testar em dispositivo com duas contas descartáveis, mudança de parada, ida/volta e troca de viagem. O endpoint não depende de nova migração SQL.

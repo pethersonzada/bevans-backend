@@ -16,6 +16,9 @@ public class OperacaoController {
     @PutMapping("/{tipo}/{ref}/passageiros/{registro}/estado") public OperacaoDTO.Registro alterar(@PathVariable TipoOperacao tipo,@PathVariable Long ref,@PathVariable Long registro,@RequestBody OperacaoDTO.Alteracao d){return service.alterarDono(tipo,ref,registro,access.uid(),d);}
     @GetMapping("/{tipo}/{ref}/passageiros/{registro}/historico") public List<OperacaoDTO.Evento> historico(@PathVariable TipoOperacao tipo,@PathVariable Long ref,@PathVariable Long registro){return service.historico(tipo,ref,registro,access.uid());}
     @GetMapping("/VIAGEM/{ref}/minha") public OperacaoDTO.Registro minha(@PathVariable Long ref){return service.minha(ref,access.uid());}
+    @GetMapping("/VIAGEM/{ref}/minha/posicao") public ResponseEntity<com.bevans.dto.PosicaoEmbarqueDTO> posicaoMinha(@PathVariable Long ref){
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.posicaoMinha(ref,access.uid()));
+    }
     @PutMapping("/VIAGEM/{ref}/minha/estado") public OperacaoDTO.Registro alterarMinha(@PathVariable Long ref,@RequestBody OperacaoDTO.Alteracao d){return service.alterarMinha(ref,access.uid(),d);}
     @GetMapping("/VIAGEM/{ref}/minha/historico") public List<OperacaoDTO.Evento> historicoMeu(@PathVariable Long ref){return service.historicoMeu(ref,access.uid());}
 }

@@ -156,6 +156,22 @@ public class OperacaoService {
         var i=inscricoes.findByCredencialId(c.getId()).orElseThrow(this::naoEncontrado);return registros.findByOperacaoIdAndInscricaoId(o.id,i.getId()).orElseThrow(this::naoEncontrado);
     }
     @Transactional(readOnly=true) public OperacaoDTO.Registro minha(Long ref,String uid){return dto(proprio(buscar(TipoOperacao.VIAGEM,ref),uid));}
+    /**
+     * Retorna somente a posição operacional do próprio passageiro.
+     * Uma parada compartilhada conta uma vez, e apenas enquanto houver embarque aguardando.
+     * Sem viagem ativa ou com estado final, não anuncia próximo embarque.
+     */
+    @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ)
+    public PosicaoEmbarqueDTO posicaoMinha(Long ref,String uid){
+        var operacao=buscar(TipoOperacao.VIAGEM,ref);
+        var proprio=proprio(operacao,uid);
+        boolean aguardando=ativa(operacao)&&proprio.estado==EstadoOperacional.AGUARDANDO;
+        Long pendentes=aguardando
+            ?registros.contarParadasPendentesAntes(operacao.id,EstadoOperacional.AGUARDANDO,proprio.ordem)
+            :null;
+        return new PosicaoEmbarqueDTO(ref,proprio.estado,proprio.ordem,pendentes,
+            pendentes!=null&&pendentes==0L);
+    }
     @Transactional(readOnly=true) public OperacaoDTO.Registro minhaWeb(Long ref,String token){return dto(web(buscar(TipoOperacao.EXCURSAO,ref),token));}
     /**
      * Descobre apenas execuções cujo snapshot contém a própria inscrição confirmada.

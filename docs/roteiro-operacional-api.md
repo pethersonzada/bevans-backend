@@ -30,3 +30,7 @@ O horário cadastrado é previsto: não há prazo máximo de atraso para partida
 A prévia de leitura é permitida antes, no instante e após a partida prevista, sem alterar cadastro. Após iniciar, retorna o snapshot daquele sentido, inclusive depois de finalizar/cancelar. Sem snapshot, excursões canceladas/concluídas não ganham novo planejamento.
 
 Conflitos acrescentam `codigo` sem remover `erro`, `status`, `timestamp` e `caminho`: `ESTADO_INVALIDO`, `EXECUCAO_EXISTENTE`, `EXECUCAO_ATIVA`, `IDA_NAO_FINALIZADA`, `ROTEIRO_INCONSISTENTE` e `PONTO_INVALIDO`. Os demais erros existentes preservam seu contrato.
+
+## Progressão da navegação privada (IDA/VOLTA)
+
+IDA: origem cadastrada → pontos de coleta → destino cadastrado (campus). VOLTA: campus → pontos de entrega → origem cadastrada. O snapshot mantém os extremos em ambos os sentidos mesmo após todos embarcarem. O estado EMBARCADO na VOLTA significa embarque, não conclusão da entrega residencial. A navegação mobile pode reconciliar o prefixo de pontos com os registros oficiais: na IDA, embarque/ausência/desembarque resolvem a coleta; na VOLTA, somente desembarque/ausência resolvem a entrega. Pontos vazios e destino permanecem obrigatórios; não há encerramento automático. O backend mantém o bloqueio de encerramento com pessoas embarcadas. Não se usa GPS como prova de embarque ou desembarque.

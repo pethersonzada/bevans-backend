@@ -107,6 +107,36 @@ class OperacaoIntegrationTest {
         assertEquals(-8.16,service.roteiroViagem(segunda,uid).get(1).latitude());assertEquals(-8.1,service.roteiroViagem(primeira,uid).get(1).latitude());
     }
 
+    @Test void privadaIdaEVoltaPreservamDestinoAposTodosEmbarcarem(){
+        var c=cenario();passageiroAdicional(c,-8.15);
+        String uid=c.dono().getFirebaseUid();Long turma=c.turma().getId();
+        for(String sentido:List.of("IDA","VOLTA")){
+            Long id=iniciar(c,sentido);
+            var roteiro=service.roteiroViagem(id,uid);
+            assertEquals(sentido.equals("IDA")?"Garagem":"Campus",roteiro.getFirst().nome());
+            assertEquals(sentido.equals("IDA")?"Campus":"Garagem",roteiro.getLast().nome());
+            assertEquals("DESTINO",roteiro.getLast().tipo());
+            assertEquals(4,roteiro.size());
+            var painel=service.painel(TipoOperacao.VIAGEM,id,uid);
+            assertEquals(2,painel.contadores().esperados());
+            for(var r:painel.registros())
+                service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.EMBARCADO,r.versao()));
+            var embarcados=service.painel(TipoOperacao.VIAGEM,id,uid);
+            assertEquals(2,embarcados.contadores().naVan());
+            assertEquals(0,embarcados.contadores().aguardando());
+            assertEquals("ATIVA",viagens.verificarStatusAtual(turma).get("status"));
+            assertEquals(roteiro.stream().map(p->List.of(p.tipo(),p.nome(),p.latitude(),p.longitude(),p.passageiros().stream().map(PassageiroRotaDTO::getId).toList())).toList(),
+                service.roteiroViagem(id,uid).stream().map(p->List.of(p.tipo(),p.nome(),p.latitude(),p.longitude(),p.passageiros().stream().map(PassageiroRotaDTO::getId).toList())).toList());
+            assertThrows(ResponseStatusException.class,()->viagens.encerrarRota(turma));
+            for(var r:embarcados.registros())
+                service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.DESEMBARCADO,r.versao()));
+            viagens.encerrarRota(turma);
+            assertEquals("FINALIZADA",viagens.verificarStatusAtual(turma).get("estado"));
+            assertEquals(roteiro.stream().map(p->List.of(p.tipo(),p.nome(),p.latitude(),p.longitude(),p.passageiros().stream().map(PassageiroRotaDTO::getId).toList())).toList(),
+                service.roteiroViagem(id,uid).stream().map(p->List.of(p.tipo(),p.nome(),p.latitude(),p.longitude(),p.passageiros().stream().map(PassageiroRotaDTO::getId).toList())).toList());
+        }
+    }
+
     private void assertInicioPublicoBloqueado(Long turmaId, Long rotaId) {
         long operacoesAntes = operacoes.count();
 

@@ -28,6 +28,39 @@ public class OperacaoService {
             CredencialInscricaoExcursaoRepository c,ColetaPrivadaService cp,EntityManager em,Clock clock,ApplicationEventPublisher publisher){
         operacoes=o;registros=r;eventos=e;viagens=v;execucoes=x;turmas=t;excursoes=ex;usuarios=u;vinculos=a;publicas=p;paradas=pp;embarques=b;presencas=pr;inscricoes=i;credenciais=c;coletas=cp;this.em=em;this.clock=clock;this.publisher=publisher;
     }
+    @org.springframework.beans.factory.annotation.Autowired private ViagemService cicloViagem;
+    @org.springframework.beans.factory.annotation.Autowired private PosicaoViagemService gpsViagem;
+
+    /** A confirmação explícita de chegada pelo dono encerra exclusivamente a IDA privada.
+     * Os desembarques e o fim são persistidos na mesma transação e sob o lock da turma. */
+    @Transactional public void concluirIdaPrivada(Long ref,String uid){
+        var o=buscar(TipoOperacao.VIAGEM,ref);dono(o,uid);lock(o);dono(o,uid);
+        if(!"PRIVADA".equals(o.viagem.getModalidade())||!"IDA".equals(o.sentido))
+            throw conflito("Conclusão coletiva disponível apenas na ida privada.");
+        if("FINALIZADA".equals(o.viagem.getStatus()))return;
+        if(!ativa(o))throw conflito("Viagem não está ativa.");
+        var pontos=roteiroViagem(ref,uid);
+        var destino=pontos.getLast();
+        if(!"DESTINO".equals(destino.tipo()))throw conflito("Destino da viagem indisponível.");
+        var pos=gpsViagem.consultar(ref,uid);
+        if(!"ATUALIZADA".equals(pos.estado())||pos.precisao()==null||pos.precisao()>45||
+                pos.latitude()==null||pos.longitude()==null||
+                distanciaMetros(pos.latitude(),pos.longitude(),destino.latitude(),destino.longitude())>80)
+            throw conflito("Aguarde a confirmação de GPS próximo ao destino para encerrar.");
+        var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id);
+        for(var r:rs)em.refresh(r);
+        if(rs.stream().anyMatch(r->r.estado==EstadoOperacional.AGUARDANDO))
+            throw conflito("Resolva passageiros aguardando antes de encerrar.");
+        String autor="USUARIO:"+usuario(uid).getId();
+        for(var r:rs)if(r.estado==EstadoOperacional.EMBARCADO)
+            alterar(o,r,new OperacaoDTO.Alteracao(EstadoOperacional.DESEMBARCADO,false,r.versao,null),autor,"MOTORISTA",true);
+        cicloViagem.encerrarRota(o.viagem.getTurma().getId());
+    }
+    private static double distanciaMetros(double lat1,double lon1,double lat2,double lon2){
+        double a=Math.pow(Math.sin(Math.toRadians(lat2-lat1)/2),2)+
+            Math.cos(Math.toRadians(lat1))*Math.cos(Math.toRadians(lat2))*Math.pow(Math.sin(Math.toRadians(lon2-lon1)/2),2);
+        return 6371000*2*Math.asin(Math.sqrt(Math.min(1,a)));
+    }
     private ResponseStatusException naoEncontrado(){return new ResponseStatusException(HttpStatus.NOT_FOUND,"Operação ou passageiro não encontrado.");}
     private ResponseStatusException conflito(String s){return new ResponseStatusException(HttpStatus.CONFLICT,s);}
     private Usuario usuario(String uid){return usuarios.findByFirebaseUid(uid).orElseThrow(()->new AccessDeniedException("Perfil inválido."));}

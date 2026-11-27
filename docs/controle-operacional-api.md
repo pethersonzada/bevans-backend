@@ -92,3 +92,7 @@ A execução precisa ter produzido seu registro operacional para ser descoberta.
 - Acesso de pessoa não autorizada é rejeitado; outros registros, nomes, coordenadas e totais de terceiros não são retornados. Resposta com `Cache-Control: no-store`.
 - Não substitui o endpoint `/minha`, que preserva seu contrato atual. O Android deve consultar essa rota enquanto houver viagem ativa, usar `proximo` e `paradasAntes` apenas quando disponíveis, e indicar indisponibilidade em caso de erro ou estado antigo.
 - Testar em dispositivo com duas contas descartáveis, mudança de parada, ida/volta e troca de viagem. O endpoint não depende de nova migração SQL.
+
+## Conclusão coletiva da ida privada
+
+`POST /operacoes/VIAGEM/{viagemId}/concluir-ida` (204) é uma ação explícita do motorista proprietário, somente para IDA privada. O app solicita após chegada ao destino do snapshot. O servidor exige GPS atualizado, precisão até 45 m, distância até 80 m e nenhum passageiro AGUARDANDO. Desembarca somente os EMBARCADOS usando as transições, auditoria e eventos existentes; encerra a viagem na mesma transação sob o lock da turma. Repetir em viagem já FINALIZADA é idempotente. A VOLTA, rotas públicas, excursões e encerramento/cancelamento genéricos permanecem inalterados. GPS não registra desembarque sozinho.

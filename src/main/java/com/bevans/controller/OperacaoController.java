@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.*;
 public class OperacaoController {
     private final OperacaoService service;private final AccessPolicy access;
     public OperacaoController(OperacaoService s,AccessPolicy a){service=s;access=a;}
+    @PostMapping("/VIAGEM/{ref}/concluir-ida") public ResponseEntity<Void> concluirIda(@PathVariable Long ref){
+        service.concluirIdaPrivada(ref,access.uid());return ResponseEntity.noContent().build();
+    }
     @GetMapping("/VIAGEM/{ref}/roteiro") public ResponseEntity<List<com.bevans.dto.PontoColetaPrivadaDTO>> roteiro(@PathVariable Long ref){return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.roteiroViagem(ref,access.uid()));}
     @GetMapping("/{tipo}/{ref}") public ResponseEntity<OperacaoDTO> painel(@PathVariable TipoOperacao tipo,@PathVariable Long ref){return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.painel(tipo,ref,access.uid()));}
     @PostMapping("/{tipo}/{ref}/preparacao") public void preparar(@PathVariable TipoOperacao tipo,@PathVariable Long ref){service.prepararLegada(tipo,ref,access.uid());}

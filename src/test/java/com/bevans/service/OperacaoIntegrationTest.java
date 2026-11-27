@@ -137,6 +137,24 @@ class OperacaoIntegrationTest {
         }
     }
 
+    @Test void concluirIdaPrivadaRegistraDesembarquesEFinalizaUmaVez(){
+        var c=cenario();passageiroAdicional(c,-8.15);Long id=iniciar(c,"IDA");
+        String uid=c.dono().getFirebaseUid();
+        assertThrows(AccessDeniedException.class,()->service.concluirIdaPrivada(id,c.aluno().getFirebaseUid()));
+        assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid));
+        gpsViagem.enviar(id,uid,new PosicaoRequest("destino-coletivo",-8.3,-35.3,clock.instant(),5.0,0.0));
+        assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid));
+        var painel=service.painel(TipoOperacao.VIAGEM,id,uid);
+        for(var r:painel.registros())service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.EMBARCADO,r.versao()));
+        service.concluirIdaPrivada(id,uid);
+        service.concluirIdaPrivada(id,uid);
+        assertEquals("FINALIZADA",viagens.verificarStatusAtual(c.turma().getId()).get("estado"));
+        var fim=service.painel(TipoOperacao.VIAGEM,id,uid);
+        assertEquals(2,fim.contadores().desembarcados());assertEquals(0,fim.contadores().naVan());
+        for(var r:fim.registros())assertEquals(2,service.historico(TipoOperacao.VIAGEM,id,r.id(),uid).size());
+        Long volta=iniciar(c,"VOLTA");assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(volta,uid));
+    }
+
     private void assertInicioPublicoBloqueado(Long turmaId, Long rotaId) {
         long operacoesAntes = operacoes.count();
 

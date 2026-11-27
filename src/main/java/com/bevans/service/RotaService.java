@@ -31,6 +31,8 @@ import com.google.ortools.constraintsolver.main;
 @Service
 public class RotaService {
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private MatrizViariaMapbox matrizViaria;
     private final PresencaRepository presencaRepository;
     private final TurmaRepository turmaRepository;
     private org.springframework.beans.factory.ObjectProvider<ColetaPrivadaService> coletas;
@@ -178,6 +180,10 @@ public class RotaService {
     // Executado na transação de início: não consulta o snapshot ainda em construção
     // nem transfere a leitura de presenças para outra thread.
     public List<PassageiroRotaDTO> planejarPrivada(String sentido,Long turmaId) {
+        return planejarPrivada(sentido,turmaId,true);
+    }
+
+    public List<PassageiroRotaDTO> planejarPrivada(String sentido,Long turmaId,boolean custoViario) {
         if(!"IDA".equalsIgnoreCase(sentido)&&!"VOLTA".equalsIgnoreCase(sentido))throw new IllegalArgumentException("Informe IDA ou VOLTA.");
         boolean isVolta="VOLTA".equalsIgnoreCase(sentido);
         var coleta=coletas==null?null:coletas.getIfAvailable();
@@ -340,18 +346,13 @@ public class RotaService {
 
         // 9. Calcular matriz de distâncias.
 
-        long[][] distancias = new long[n][n];
-
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                distancias[i][j] =
-                        (long) calcularDistancia(
-                                lats[i],
-                                lons[i],
-                                lats[j],
-                                lons[j]
-                        );
-            }
+        final long[][] distancias;
+        if(custoViario && n>3 && matrizViaria!=null && matrizViaria.habilitada()){
+            distancias=matrizViaria.calcular(lats,lons);
+        }else{
+            distancias=new long[n][n];
+            for(int i=0;i<n;i++)for(int j=0;j<n;j++)
+                distancias[i][j]=(long)calcularDistancia(lats[i],lons[i],lats[j],lons[j]);
         }
 
         // 10. Sentido da viagem.
@@ -416,6 +417,7 @@ public class RotaService {
                                         FirstSolutionStrategy.Value
                                                 .PATH_CHEAPEST_ARC
                                 )
+                                .setLocalSearchMetaheuristic(com.google.ortools.constraintsolver.LocalSearchMetaheuristic.Value.GREEDY_DESCENT)
                                 .setTimeLimit(com.google.protobuf.Duration.newBuilder().setSeconds(2).build())
                                 .build()
                 );

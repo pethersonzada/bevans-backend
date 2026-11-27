@@ -84,6 +84,34 @@ class RotaServiceTest {
     }
 
     @Test
+    void matrizViariaAssimetricaCorrigeOrdemNaVoltaSemTrocarExtremos() {
+        preparar(turma,presenca(2,-8.08),presenca(3,-8.02),presenca(4,-8.05));
+        var matriz=mock(MatrizViariaMapbox.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"matrizViaria",matriz);
+        when(matriz.habilitada()).thenReturn(true);
+        // Índices: garagem=0, passageiros=1,2,3, faculdade=4.
+        long[][] custo=new long[5][5];
+        for(int i=0;i<5;i++)for(int j=0;j<5;j++)custo[i][j]=i==j?0:10000;
+        custo[4][2]=10;custo[2][3]=10;custo[3][1]=10;custo[1][0]=10;
+        custo[0][1]=20;custo[1][3]=20;custo[3][2]=20;custo[2][4]=20;
+        when(matriz.calcular(any(double[].class),any(double[].class))).thenReturn(custo);
+        assertEquals(List.of(3L,4L,2L),ids("VOLTA",1));
+        assertEquals(List.of(2L,4L,3L),ids("IDA",1));
+        verify(matriz,times(2)).calcular(any(double[].class),any(double[].class));
+    }
+
+    @Test
+    void matrizIndisponivelNaoFingeOtimizacaoViaria() {
+        preparar(turma,presenca(2,-8.08),presenca(3,-8.02));
+        var matriz=mock(MatrizViariaMapbox.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"matrizViaria",matriz);
+        when(matriz.habilitada()).thenReturn(true);
+        when(matriz.calcular(any(double[].class),any(double[].class))).thenThrow(
+            new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"Matriz indisponível"));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->ids("VOLTA",1));
+    }
+
+    @Test
     void duasTurmasUsamOrigemDoRespectivoMotoristaSemEscolhaGlobal() {
         turma.setOrigemLatitude(null);
         Turma outra = turma(2, -8.1, -8.0);

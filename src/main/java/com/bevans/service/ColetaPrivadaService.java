@@ -111,11 +111,14 @@ public class ColetaPrivadaService {
         return roteiroSistema(id,s,otimizar);
     }
     @Transactional(readOnly=true) public List<PontoColetaPrivadaDTO> roteiroSistema(Long id,String s,boolean otimizar){
+        return roteiroSistema(id,s,otimizar,true);
+    }
+    private List<PontoColetaPrivadaDTO> roteiroSistema(Long id,String s,boolean otimizar,boolean custoViario){
         sentido(s);var t=turmas.findById(id).orElseThrow(this::ausente);coordenadas(t.getOrigemLatitude(),t.getOrigemLongitude());coordenadas(t.getDestinoLatitude(),t.getDestinoLongitude());
         var pontos=new ArrayList<PontoColetaPrivadaDTO>();boolean volta="VOLTA".equals(s);
         pontos.add(new PontoColetaPrivadaDTO("ORIGEM",null,volta?t.getDestinoNome():t.getOrigemNome(),volta?t.getDestinoLatitude():t.getOrigemLatitude(),volta?t.getDestinoLongitude():t.getOrigemLongitude(),List.of()));
         if(!usaParadas(id,s)){
-            for(var p:rotas.getObject().planejarPrivada(s,id))pontos.add(new PontoColetaPrivadaDTO("INDIVIDUAL",null,p.getNome(),p.getLatitude(),p.getLongitude(),List.of(p)));
+            for(var p:rotas.getObject().planejarPrivada(s,id,custoViario))pontos.add(new PontoColetaPrivadaDTO("INDIVIDUAL",null,p.getNome(),p.getLatitude(),p.getLongitude(),List.of(p)));
         }else{
             var c=coleta(id,s);var ps=new ArrayList<>(ativas(c));if(ps.isEmpty())throw conflito("Nenhuma parada ativa.");
             var porAluno=new HashMap<Long,EscolhaParadaPrivada>();escolhas.findByColetaIdAndAtivaTrue(c.getId()).forEach(e->porAluno.put(e.getAluno().getId(),e));
@@ -127,8 +130,8 @@ public class ColetaPrivadaService {
             if(volta)Collections.reverse(ps);for(var p:ps)pontos.add(new PontoColetaPrivadaDTO("PARADA",p.getId(),p.getNome(),p.getLatitude(),p.getLongitude(),List.copyOf(membros.getOrDefault(p.getId(),List.of()))));
         }
         pontos.add(new PontoColetaPrivadaDTO("DESTINO",null,volta?t.getOrigemNome():t.getDestinoNome(),volta?t.getOrigemLatitude():t.getDestinoLatitude(),volta?t.getOrigemLongitude():t.getDestinoLongitude(),List.of()));
-        if(!otimizar||pontos.size()<3)return pontos;var entrada=new ArrayList<PontoPublicoDTO>();for(int n=0;n<pontos.size();n++){var p=pontos.get(n);entrada.add(new PontoPublicoDTO((long)n,p.nome(),p.latitude(),p.longitude()));}
+        if(!otimizar||pontos.size()<3||!usaParadas(id,s))return pontos;var entrada=new ArrayList<PontoPublicoDTO>();for(int n=0;n<pontos.size();n++){var p=pontos.get(n);entrada.add(new PontoPublicoDTO((long)n,p.nome(),p.latitude(),p.longitude()));}
         return OtimizadorParadas.ordenar(entrada).stream().map(p->pontos.get(Math.toIntExact(p.paradaId()))).toList();
     }
-    @Transactional(readOnly=true) public void validarInicio(Long id,String s){sentido(s);roteiroSistema(id,s,false);}
+    @Transactional(readOnly=true) public void validarInicio(Long id,String s){sentido(s);roteiroSistema(id,s,false,false);}
 }

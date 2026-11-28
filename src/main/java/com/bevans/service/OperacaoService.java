@@ -176,7 +176,7 @@ public class OperacaoService {
     }
     @Transactional(readOnly=true,isolation=Isolation.REPEATABLE_READ) public OperacaoDTO painel(TipoOperacao tipo,Long ref,String uid){
         var o=buscar(tipo,ref);dono(o,uid);var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id);long a=rs.stream().filter(r->r.estado==EstadoOperacional.AGUARDANDO).count(),b=rs.stream().filter(r->r.estado==EstadoOperacional.EMBARCADO).count(),n=rs.stream().filter(r->r.estado==EstadoOperacional.NAO_EMBARCOU).count(),d=rs.stream().filter(r->r.estado==EstadoOperacional.DESEMBARCADO).count();
-        return new OperacaoDTO(o.id,o.tipo,o.referenciaId,o.sentido,new OperacaoDTO.Contadores(rs.size(),a,b,n,d),rs.stream().map(this::dto).toList());
+        return new OperacaoDTO(o.id,o.tipo,o.referenciaId,o.sentido,new OperacaoDTO.Contadores(rs.size(),a,b,n,d),rs.stream().map(this::dto).toList(),o.viagem==null?null:o.viagem.getModalidade());
     }
     private RegistroOperacional proprio(OperacaoViagem o,String uid){
         var u=usuario(uid);if(o.tipo!=TipoOperacao.VIAGEM||!"PASSAGEIRO".equals(u.getTipo())||!vinculos.existsByTurmaIdAndAlunoIdAndStatus(o.viagem.getTurma().getId(),u.getId(),"APROVADO"))throw new AccessDeniedException("Passageiro não autorizado.");
@@ -241,9 +241,14 @@ public class OperacaoService {
         if(corrigir&&!dono)throw new AccessDeniedException("Somente motorista corrige.");
         if(r.estado==d.estado())return dto(r);if(!ativa(o))throw conflito("Viagem encerrada.");
         if(d.versao()==null||d.versao()!=r.versao)throw conflito("Registro mudou; atualize a versão.");
+        // Na volta privada, a confirmação explícita do motorista no destino do aluno
+        // basta. Não criar evento de embarque fictício para cumprir uma etapa de UI.
+        boolean desembarqueDireto=dono&&o.tipo==TipoOperacao.VIAGEM&&o.viagem!=null&&
+            "PRIVADA".equals(o.viagem.getModalidade())&&"VOLTA".equals(o.sentido)&&
+            r.estado==EstadoOperacional.AGUARDANDO&&d.estado()==EstadoOperacional.DESEMBARCADO;
         if(corrigir){if(d.motivo()==null||d.motivo().isBlank()||d.motivo().length()>500)throw new IllegalArgumentException("Informe motivo da correção (até 500 caracteres).");}
-        else if(!((r.estado==EstadoOperacional.AGUARDANDO&&(d.estado()==EstadoOperacional.EMBARCADO||d.estado()==EstadoOperacional.NAO_EMBARCOU))||(r.estado==EstadoOperacional.EMBARCADO&&d.estado()==EstadoOperacional.DESEMBARCADO)))throw conflito("Transição inválida; solicite correção ao motorista.");
-        if(d.estado()==EstadoOperacional.DESEMBARCADO&&r.estado!=EstadoOperacional.EMBARCADO)throw conflito("Desembarque exige embarque válido anterior.");
+        else if(!desembarqueDireto&&!((r.estado==EstadoOperacional.AGUARDANDO&&(d.estado()==EstadoOperacional.EMBARCADO||d.estado()==EstadoOperacional.NAO_EMBARCOU))||(r.estado==EstadoOperacional.EMBARCADO&&d.estado()==EstadoOperacional.DESEMBARCADO)))throw conflito("Transição inválida; solicite correção ao motorista.");
+        if(d.estado()==EstadoOperacional.DESEMBARCADO&&r.estado!=EstadoOperacional.EMBARCADO&&!desembarqueDireto)throw conflito("Desembarque exige embarque válido anterior.");
         var anterior=r.estado;r.estado=d.estado();r.autor=autor;r.origem=origem;r.atualizadoEm=clock.instant();registros.saveAndFlush(r);
         var e=new EventoOperacional();e.registro=r;e.anterior=anterior;e.novo=r.estado;e.autor=autor;e.origem=origem;e.criadoEm=r.atualizadoEm;e.correcao=corrigir;e.motivo=corrigir?d.motivo().trim():null;e.versaoRegistro=r.versao;eventos.saveAndFlush(e);
         publisher.publishEvent(new EventosDeViagem.Operacao(o.id,r.id,corrigir?"ESTADO_CORRIGIDO":r.estado==EstadoOperacional.EMBARCADO?"EMBARQUE_CONFIRMADO":r.estado==EstadoOperacional.DESEMBARCADO?"DESEMBARQUE_CONFIRMADO":"NAO_EMBARCOU","REGISTRO:"+r.id+":"+r.versao));return dto(r);

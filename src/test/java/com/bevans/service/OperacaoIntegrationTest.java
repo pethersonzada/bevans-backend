@@ -137,6 +137,46 @@ class OperacaoIntegrationTest {
         }
     }
 
+    @Test void voltaPrivadaMotoristaDesembarcaDiretoComAuditoriaSemEmbarqueFicticio(){
+        var c=cenario();var outro=passageiroAdicional(c,-8.15);
+        String uid=c.dono().getFirebaseUid();
+        Long id=iniciar(c,"VOLTA");
+        var painel=service.painel(TipoOperacao.VIAGEM,id,uid);
+        assertEquals("PRIVADA",painel.modalidade());
+        var r=painel.registros().stream().filter(p->p.alunoId().equals(c.aluno().getId())).findFirst().orElseThrow();
+        assertEquals(EstadoOperacional.AGUARDANDO,r.estado());
+        assertThrows(ResponseStatusException.class,()->service.alterarMinha(id,c.aluno().getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,r.versao())));
+        assertThrows(AccessDeniedException.class,()->service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),usuario("MOTORISTA").getFirebaseUid(),estado(EstadoOperacional.DESEMBARCADO,r.versao())));
+        assertThrows(ResponseStatusException.class,()->service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.DESEMBARCADO,r.versao()+1)));
+        var alterado=service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.DESEMBARCADO,r.versao()));
+        assertEquals(EstadoOperacional.DESEMBARCADO,alterado.estado());
+        service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.DESEMBARCADO,r.versao()));
+        var historico=service.historico(TipoOperacao.VIAGEM,id,r.id(),uid);
+        assertEquals(1,historico.size());
+        assertEquals(EstadoOperacional.AGUARDANDO,historico.getFirst().anterior());
+        assertEquals(EstadoOperacional.DESEMBARCADO,historico.getFirst().novo());
+        assertFalse(historico.getFirst().correcao());
+        var restante=service.painel(TipoOperacao.VIAGEM,id,uid).registros().stream().filter(p->p.alunoId().equals(outro.getId())).findFirst().orElseThrow();
+        assertEquals(EstadoOperacional.AGUARDANDO,restante.estado());
+        service.alterarDono(TipoOperacao.VIAGEM,id,restante.id(),uid,estado(EstadoOperacional.NAO_EMBARCOU,restante.versao()));
+        viagens.encerrarRota(c.turma().getId());
+        assertEquals("FINALIZADA",viagens.verificarStatusAtual(c.turma().getId()).get("estado"));
+        Long ida=iniciar(c,"IDA");
+        var i=service.painel(TipoOperacao.VIAGEM,ida,uid).registros().getFirst();
+        assertThrows(ResponseStatusException.class,()->service.alterarDono(TipoOperacao.VIAGEM,ida,i.id(),uid,estado(EstadoOperacional.DESEMBARCADO,i.versao())));
+    }
+
+    @Test void voltaPublicaNaoPermiteDesembarqueDireto(){
+        var c=cenario();String uid=c.dono().getFirebaseUid();
+        var rota=publicas.criar(c.dono().getId(),new RotaPublicaRequest(c.turma().getId(),"Flexível","Recife",CategoriaRota.OUTROS,ModoRota.FLEXIVEL,"Origem",-8.0,-35.0,"Destino",-8.3,-35.3,null,null,null,EnumSet.allOf(DayOfWeek.class),LocalTime.of(18,0),LocalTime.of(23,0)));
+        publicas.publicar(rota.id(),c.dono().getId(),true);
+        var pedido=embarques.solicitar(rota.id(),c.aluno().getId(),new EmbarqueRequest(LocalDate.now(clock),"VOLTA",null,"Pin aprovado",-8.12,-35.12,true,null));
+        embarques.analisar(pedido.id(),c.dono().getId(),StatusEmbarque.APROVADO);
+        Long id=iniciarPublica(c,"VOLTA",rota.id());
+        var r=service.painel(TipoOperacao.VIAGEM,id,uid).registros().getFirst();
+        assertThrows(ResponseStatusException.class,()->service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.DESEMBARCADO,r.versao())));
+    }
+
     @Test void concluirIdaPrivadaRegistraDesembarquesEFinalizaUmaVez(){
         var c=cenario();passageiroAdicional(c,-8.15);Long id=iniciar(c,"IDA");
         String uid=c.dono().getFirebaseUid();

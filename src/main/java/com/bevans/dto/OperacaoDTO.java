@@ -9,5 +9,7 @@ public record OperacaoDTO(Long id,TipoOperacao tipo,Long referenciaId,String sen
     @io.swagger.v3.oas.annotations.media.Schema(name="EventoOperacional")
     public record Evento(Long id,EstadoOperacional anterior,EstadoOperacional novo,String autor,String origem,Instant criadoEm,boolean correcao,String motivo,long versaoRegistro){@Override public String toString(){return "Evento[auditoria privada]";}}
     public record Alteracao(EstadoOperacional estado,Boolean correcao,Long versao,String motivo){}
+    public record ConclusaoIda(boolean perto,Double distanciaMetros,long aguardando,long naVan){}
+    public record ConclusaoIdaRequest(String motivo){}
     @Override public String toString(){return "OperacaoDTO[dados privados]";}
 }

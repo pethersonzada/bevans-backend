@@ -31,29 +31,59 @@ public class OperacaoService {
     @org.springframework.beans.factory.annotation.Autowired private ViagemService cicloViagem;
     @org.springframework.beans.factory.annotation.Autowired private PosicaoViagemService gpsViagem;
 
-    /** A confirmação explícita de chegada pelo dono encerra exclusivamente a IDA privada.
-     * Os desembarques e o fim são persistidos na mesma transação e sob o lock da turma. */
-    @Transactional public void concluirIdaPrivada(Long ref,String uid){
-        var o=buscar(TipoOperacao.VIAGEM,ref);dono(o,uid);lock(o);dono(o,uid);
+    private static final double RAIO_CHEGADA_METROS=200;
+    private void validarIdaPrivada(OperacaoViagem o){
         if(!"PRIVADA".equals(o.viagem.getModalidade())||!"IDA".equals(o.sentido))
             throw conflito("Conclusão coletiva disponível apenas na ida privada.");
+    }
+    private Double distanciaGpsDestino(PosicaoDTO pos,PontoColetaPrivadaDTO destino){
+        if(!"ATUALIZADA".equals(pos.estado())||pos.precisao()==null||!Double.isFinite(pos.precisao())||
+                pos.precisao()<0||pos.precisao()>45||pos.latitude()==null||pos.longitude()==null)return null;
+        return distanciaMetros(pos.latitude(),pos.longitude(),destino.latitude(),destino.longitude());
+    }
+    private PontoColetaPrivadaDTO destinoIda(Long ref,String uid){
+        var pontos=roteiroViagem(ref,uid);var destino=pontos.getLast();
+        if(!"DESTINO".equals(destino.tipo()))throw conflito("Destino da viagem indisponível.");
+        return destino;
+    }
+    @Transactional(readOnly=true) public OperacaoDTO.ConclusaoIda consultarConclusaoIda(Long ref,String uid){
+        var o=buscar(TipoOperacao.VIAGEM,ref);dono(o,uid);validarIdaPrivada(o);
+        if(!ativa(o))throw conflito("Viagem não está ativa.");
+        var pos=gpsViagem.consultar(ref,uid);var distancia=distanciaGpsDestino(pos,destinoIda(ref,uid));
+        var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id);
+        return new OperacaoDTO.ConclusaoIda(distancia!=null&&distancia<=RAIO_CHEGADA_METROS,distancia,
+            rs.stream().filter(r->r.estado==EstadoOperacional.AGUARDANDO).count(),
+            rs.stream().filter(r->r.estado==EstadoOperacional.EMBARCADO).count());
+    }
+    /** Encerra a IDA privada sob o lock da turma, com registro auditável da chegada.
+     * Na chegada normal, confirma os desembarques em lote. Fora da área ou sem GPS
+     * confiável, exige motivo e todos os registros resolvidos previamente. */
+    @Transactional public void concluirIdaPrivada(Long ref,String uid){
+        concluirIdaPrivada(ref,uid,null);
+    }
+    @Transactional public void concluirIdaPrivada(Long ref,String uid,String motivo){
+        var o=buscar(TipoOperacao.VIAGEM,ref);dono(o,uid);lock(o);dono(o,uid);validarIdaPrivada(o);
         if("FINALIZADA".equals(o.viagem.getStatus()))return;
         if(!ativa(o))throw conflito("Viagem não está ativa.");
-        var pontos=roteiroViagem(ref,uid);
-        var destino=pontos.getLast();
-        if(!"DESTINO".equals(destino.tipo()))throw conflito("Destino da viagem indisponível.");
+        if(motivo!=null&&(motivo.isBlank()||motivo.trim().length()>500))
+            throw new IllegalArgumentException("Informe o motivo do encerramento manual (até 500 caracteres).");
+        boolean manual=motivo!=null;
         var pos=gpsViagem.consultar(ref,uid);
-        if(!"ATUALIZADA".equals(pos.estado())||pos.precisao()==null||pos.precisao()>45||
-                pos.latitude()==null||pos.longitude()==null||
-                distanciaMetros(pos.latitude(),pos.longitude(),destino.latitude(),destino.longitude())>80)
-            throw conflito("Aguarde a confirmação de GPS próximo ao destino para encerrar.");
+        var distancia=distanciaGpsDestino(pos,destinoIda(ref,uid));
+        if(!manual&&(distancia==null||distancia>RAIO_CHEGADA_METROS))
+            throw conflito("GPS fora da área de chegada ou indisponível. Atualize e confirme o encerramento manual com motivo.");
         var rs=registros.findByOperacaoIdOrderByOrdemAscIdAsc(o.id);
         for(var r:rs)em.refresh(r);
         if(rs.stream().anyMatch(r->r.estado==EstadoOperacional.AGUARDANDO))
             throw conflito("Resolva passageiros aguardando antes de encerrar.");
+        if(manual&&rs.stream().anyMatch(r->r.estado==EstadoOperacional.EMBARCADO))
+            throw conflito("Há passageiros na van: confirme desembarques antes de encerrar manualmente.");
         String autor="USUARIO:"+usuario(uid).getId();
         for(var r:rs)if(r.estado==EstadoOperacional.EMBARCADO)
             alterar(o,r,new OperacaoDTO.Alteracao(EstadoOperacional.DESEMBARCADO,false,r.versao,null),autor,"MOTORISTA",true);
+        o.registrarConclusaoIda(manual?"MANUAL":"GPS",manual?motivo.trim():null,autor,clock.instant(),
+            pos.estado(),pos.latitude(),pos.longitude(),pos.precisao(),pos.observadoEm(),distancia);
+        operacoes.saveAndFlush(o);
         cicloViagem.encerrarRota(o.viagem.getTurma().getId());
     }
     private static double distanciaMetros(double lat1,double lon1,double lat2,double lon2){

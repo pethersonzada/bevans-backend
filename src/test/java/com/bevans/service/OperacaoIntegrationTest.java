@@ -182,7 +182,8 @@ class OperacaoIntegrationTest {
         String uid=c.dono().getFirebaseUid();
         assertThrows(AccessDeniedException.class,()->service.concluirIdaPrivada(id,c.aluno().getFirebaseUid()));
         assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid));
-        gpsViagem.enviar(id,uid,new PosicaoRequest("destino-coletivo",-8.3,-35.3,clock.instant(),5.0,0.0));
+        gpsViagem.enviar(id,uid,new PosicaoRequest("destino-coletivo",-8.3012,-35.3,clock.instant(),5.0,15.0));
+        var chegada=service.consultarConclusaoIda(id,uid);assertTrue(chegada.perto());assertTrue(chegada.distanciaMetros()>80);
         assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid));
         var painel=service.painel(TipoOperacao.VIAGEM,id,uid);
         for(var r:painel.registros())service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.EMBARCADO,r.versao()));
@@ -192,7 +193,42 @@ class OperacaoIntegrationTest {
         var fim=service.painel(TipoOperacao.VIAGEM,id,uid);
         assertEquals(2,fim.contadores().desembarcados());assertEquals(0,fim.contadores().naVan());
         for(var r:fim.registros())assertEquals(2,service.historico(TipoOperacao.VIAGEM,id,r.id(),uid).size());
+        var auditoria=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
+        assertEquals("GPS",auditoria.getConclusaoModo());assertNull(auditoria.getConclusaoMotivo());
+        assertEquals(-8.3012,auditoria.getConclusaoLatitude());
         Long volta=iniciar(c,"VOLTA");assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(volta,uid));
+    }
+
+    @Test void concluirIdaForaDaAreaExigeMotivoEDesembarquesReais(){
+        var c=cenario();Long id=iniciar(c,"IDA");String uid=c.dono().getFirebaseUid();
+        gpsViagem.enviar(id,uid,new PosicaoRequest("saida-alternativa",-8.31,-35.3,clock.instant(),5.0,0.0));
+        var chegada=service.consultarConclusaoIda(id,uid);assertFalse(chegada.perto());assertTrue(chegada.distanciaMetros()>200);
+        assertThrows(AccessDeniedException.class,()->service.consultarConclusaoIda(id,c.aluno().getFirebaseUid()));
+        assertThrows(IllegalArgumentException.class,()->service.concluirIdaPrivada(id,uid," "));
+        assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid,"Entrada alternativa"));
+        var r=service.painel(TipoOperacao.VIAGEM,id,uid).registros().getFirst();
+        r=service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.EMBARCADO,r.versao()));
+        assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid,"Entrada alternativa"));
+        service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.DESEMBARCADO,r.versao()));
+        assertThrows(ResponseStatusException.class,()->service.concluirIdaPrivada(id,uid));
+        service.concluirIdaPrivada(id,uid," Entrada alternativa ");
+        service.concluirIdaPrivada(id,uid,"Não substituir auditoria");
+        var audit=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
+        assertEquals("MANUAL",audit.getConclusaoModo());assertEquals("Entrada alternativa",audit.getConclusaoMotivo());
+        assertEquals(-8.31,audit.getConclusaoLatitude());assertEquals(-35.3,audit.getConclusaoLongitude());
+        assertTrue(audit.getConclusaoDistanciaMetros()>200);assertNotNull(audit.getConclusaoEm());
+        assertEquals("FINALIZADA",viagens.verificarStatusAtual(c.turma().getId()).get("estado"));
+        assertEquals(2,service.historico(TipoOperacao.VIAGEM,id,r.id(),uid).size());
+    }
+
+    @Test void concluirIdaSemGpsPermiteMotivoSemInventarCoordenadas(){
+        var c=cenario();Long id=iniciar(c,"IDA");String uid=c.dono().getFirebaseUid();
+        var r=service.painel(TipoOperacao.VIAGEM,id,uid).registros().getFirst();
+        service.alterarDono(TipoOperacao.VIAGEM,id,r.id(),uid,estado(EstadoOperacional.NAO_EMBARCOU,r.versao()));
+        var chegada=service.consultarConclusaoIda(id,uid);assertFalse(chegada.perto());assertNull(chegada.distanciaMetros());
+        service.concluirIdaPrivada(id,uid,"GPS indisponível; nenhum passageiro embarcou");
+        var audit=operacoes.findByTipoAndReferenciaId(TipoOperacao.VIAGEM,id).orElseThrow();
+        assertEquals("MANUAL",audit.getConclusaoModo());assertNull(audit.getConclusaoLatitude());assertEquals("SEM_LOCALIZACAO",audit.getConclusaoGpsEstado());
     }
 
     private void assertInicioPublicoBloqueado(Long turmaId, Long rotaId) {
